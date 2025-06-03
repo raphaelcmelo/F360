@@ -33,6 +33,7 @@ import {
   PlannedItem,
 } from "../../types/budget";
 import { useCallback } from "react";
+import CurrencyInput from '../../components/ui/CurrencyInput';
 
 // Define the schema for the new entry form
 const newEntrySchema = z.object({
@@ -310,20 +311,12 @@ export default function Budget() {
               name="valorPlanejado"
               control={control}
               render={({ field }) => (
-                <NumberInput
+                <CurrencyInput
                   label="Valor Estimado"
-                  placeholder="0.00"
-                  min={0.01}
-                  precision={2}
-                  decimalSeparator=","
-                  thousandSeparator="."
-                  leftSection="R$"
+                  required
                   error={errors.valorPlanejado?.message}
-                  {...field}
-                  value={field.value === 0 ? "" : field.value} // Display empty string for 0
-                  onChange={(val) =>
-                    field.onChange(typeof val === "number" ? val : 0)
-                  }
+                  value={field.value}
+                  onChange={(val) => field.onChange(val)}
                 />
               )}
             />
