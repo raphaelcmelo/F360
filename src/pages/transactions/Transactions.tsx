@@ -14,7 +14,7 @@ import {
   Stack,
   Modal,
 } from "@mantine/core";
-import { useForm } from "@mantine/form";
+import { useForm, Controller } from "@mantine/form";
 import { DatePickerInput } from "@mantine/dates";
 import { motion } from "framer-motion";
 import {
@@ -28,7 +28,8 @@ import {
 import { mockApi } from "../../services/api";
 import GroupSelector from "../../components/ui/GroupSelector";
 import { Transaction } from "../../types/transaction";
-import { Budget as BudgetType, PlannedItem } from "../../types/budget"; // Import BudgetType
+import { Budget as BudgetType, PlannedItem } from "../../types/budget";
+import CurrencyInput from '../../components/ui/CurrencyInput';
 
 export default function Transactions() {
   const [selectedGroupId, setSelectedGroupId] = useState<string>("group1");
@@ -37,11 +38,11 @@ export default function Transactions() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [budget, setBudget] = useState<BudgetType | null>(null); // State for budget data
+  const [budget, setBudget] = useState<BudgetType | null>(null);
 
   const form = useForm({
     initialValues: {
-      data: new Date(), // Default to current date
+      data: new Date(),
       categoria: "",
       tipo: "",
       valor: 0,
@@ -57,7 +58,6 @@ export default function Transactions() {
     const fetchTransactionsAndBudget = async () => {
       setIsLoading(true);
       try {
-        // Get current month for mock data
         const currentDate = new Date();
         const startDate = new Date(
           currentDate.getFullYear(),
@@ -72,11 +72,11 @@ export default function Transactions() {
 
         const [transactionsData, budgetData] = await Promise.all([
           mockApi.transactions.getByGroup(selectedGroupId, startDate, endDate),
-          mockApi.budgets.getByGroup(selectedGroupId), // Fetch budget data
+          mockApi.budgets.getByGroup(selectedGroupId),
         ]);
 
         setTransactions(transactionsData);
-        setBudget(budgetData); // Set budget data
+        setBudget(budgetData);
       } catch (error) {
         console.error("Error fetching data:", error);
       } finally {
@@ -89,13 +89,11 @@ export default function Transactions() {
 
   const handleSubmit = async (values: typeof form.values) => {
     try {
-      // In a real implementation, this would call the API to create the transaction
-      // For mock, we'll assume a default user '123' and name 'Demo User'
       const newTransaction: Transaction = {
         _id: Math.random().toString(),
         grupoId: selectedGroupId,
-        criadoPor: "123", // Mock user ID
-        criadoPorNome: "Demo User", // Mock user name
+        criadoPor: "123",
+        criadoPorNome: "Demo User",
         data: values.data.toISOString(),
         categoria: values.categoria as
           | "renda"
@@ -115,7 +113,6 @@ export default function Transactions() {
     }
   };
 
-  // Filter transactions based on search and category
   const filteredTransactions = transactions.filter((transaction) => {
     const matchesSearch = transaction.tipo
       .toLowerCase()
@@ -125,12 +122,10 @@ export default function Transactions() {
     return matchesSearch && matchesCategory;
   });
 
-  // Sort transactions by date (newest first)
   const sortedTransactions = [...filteredTransactions].sort(
     (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()
   );
 
-  // Extract unique 'tipo' values from budget for the Select component
   const availableTypes = budget
     ? Array.from(
         new Set(
@@ -218,7 +213,7 @@ export default function Transactions() {
               <Table.Th>Data</Table.Th>
               <Table.Th>Categoria</Table.Th>
               <Table.Th>Tipo</Table.Th>
-              <Table.Th>Criado por</Table.Th> {/* New column header */}
+              <Table.Th>Criado por</Table.Th>
               <Table.Th style={{ textAlign: "right" }}>Valor</Table.Th>
             </Table.Tr>
           </Table.Thead>
@@ -251,8 +246,7 @@ export default function Transactions() {
                     </Badge>
                   </Table.Td>
                   <Table.Td>{transaction.tipo}</Table.Td>
-                  <Table.Td>{transaction.criadoPorNome}</Table.Td>{" "}
-                  {/* Display created by name */}
+                  <Table.Td>{transaction.criadoPorNome}</Table.Td>
                   <Table.Td style={{ textAlign: "right" }}>
                     <Text
                       fw={500}
@@ -271,8 +265,6 @@ export default function Transactions() {
             {!isLoading && sortedTransactions.length === 0 && (
               <Table.Tr>
                 <Table.Td colSpan={5} style={{ textAlign: "center" }}>
-                  {" "}
-                  {/* Adjusted colspan */}
                   <Text c="dimmed">Nenhum lançamento encontrado</Text>
                 </Table.Td>
               </Table.Tr>
@@ -280,8 +272,6 @@ export default function Transactions() {
             {isLoading && (
               <Table.Tr>
                 <Table.Td colSpan={5} style={{ textAlign: "center" }}>
-                  {" "}
-                  {/* Adjusted colspan */}
                   <Text c="dimmed">Carregando...</Text>
                 </Table.Td>
               </Table.Tr>
@@ -323,21 +313,25 @@ export default function Transactions() {
               label="Tipo"
               required
               placeholder="Selecione o tipo de lançamento"
-              data={availableTypes} // Dynamically populated from budget
+              data={availableTypes}
               searchable
               clearable
               nothingFoundMessage="Nenhum tipo encontrado. Crie em Orçamento."
               {...form.getInputProps("tipo")}
             />
 
-            <NumberInput
-              label="Valor"
-              required
-              min={0}
-              prefix="R$ "
-              decimalScale={2}
-              fixedDecimalScale
-              {...form.getInputProps("valor")}
+            <Controller
+              name="valor"
+              control={form.control}
+              render={({ field }) => (
+                <CurrencyInput
+                  label="Valor"
+                  required
+                  error={form.errors.valor?.message}
+                  value={field.value}
+                  onChange={(val) => field.onChange(val)}
+                />
+              )}
             />
 
             <Button type="submit" fullWidth mt="md">
