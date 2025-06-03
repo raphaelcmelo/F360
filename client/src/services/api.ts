@@ -2,10 +2,8 @@ import axios from "axios";
 
 // Create an axios instance
 export const api = axios.create({
-  // In a real app, this would be the URL to your backend API
-  baseURL: "/api",
-  // We'll mock the API for now, but in a real implementation
-  // you would connect to your actual backend server
+  // Set the baseURL to your backend API
+  baseURL: "http://localhost:5000/api",
 });
 
 // Add a request interceptor to include the token in requests
@@ -46,7 +44,7 @@ api.interceptors.response.use(
         // const { token } = response.data;
 
         // Mock a successful token refresh
-        const token = "new-mock-token";
+        const token = "new-mock-token"; // Replace with actual refresh token logic
 
         // Update stored token
         localStorage.setItem("token", token);
@@ -69,44 +67,37 @@ api.interceptors.response.use(
   }
 );
 
-// For demonstration purposes, let's create some mock API functions
-// In a real app, these would make actual API calls
-
-export const mockApi = {
-  // Auth APIs
-  auth: {
-    login: async (email: string, password: string) => {
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 800));
-
-      // Mock response
-      if (email === "demo@example.com" && password === "password") {
-        return {
-          user: {
-            _id: "123",
-            nome: "Demo User",
-            email: "demo@example.com",
-            grupos: ["group1"],
-          },
-          token: "mock-token",
-          refreshToken: "mock-refresh-token",
-        };
-      }
-
-      throw { response: { data: { message: "Credenciais inválidas" } } };
-    },
-
-    register: async (name: string, email: string, password: string) => {
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 800));
-
-      // Mock response
-      return {
-        message: "Usuário registrado com sucesso",
-      };
-    },
+// Real API functions
+export const authApi = {
+  login: async (email: string, password: string) => {
+    const response = await api.post("/auth/login", { email, password });
+    return response.data.data; // Assuming data contains user and token
   },
 
+  register: async (name: string, email: string, password: string) => {
+    const response = await api.post("/auth/register", { name, email, password });
+    return response.data;
+  },
+
+  getProfile: async () => {
+    const response = await api.get("/auth/profile");
+    return response.data.data; // Assuming data contains user profile
+  },
+
+  forgotPassword: async (email: string) => {
+    const response = await api.post("/auth/forgot-password", { email });
+    return response.data;
+  },
+
+  resetPassword: async (token: string, password: string) => {
+    const response = await api.post(`/auth/reset-password/${token}`, { password });
+    return response.data;
+  },
+};
+
+// For demonstration purposes, let's keep mock data for other parts if needed
+// In a real app, these would make actual API calls
+export const mockApi = {
   // Groups APIs
   groups: {
     getAll: async () => {

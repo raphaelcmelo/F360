@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, ReactNode 
 import { useNavigate } from 'react-router-dom';
 import { notifications } from '@mantine/notifications';
 import { jwtDecode } from 'jwt-decode';
-import { api } from '../services/api';
+import { authApi } from '../services/api'; // Import authApi
 import { User } from '../types/user';
 
 interface AuthContextType {
@@ -52,20 +52,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
 
       try {
-        // Mock API call to refresh token
-        // In a real implementation, this would call the backend
-        const mockUserData = {
-          _id: '123',
-          nome: 'Demo User',
-          email: 'demo@example.com',
-          grupos: ['group1'],
-        };
-        
-        setUser(mockUserData);
-        
-        // In a real implementation, you would update the tokens here
-        // localStorage.setItem('token', response.data.token);
-        // localStorage.setItem('refreshToken', response.data.refreshToken);
+        // In a real implementation, this would call the backend to refresh token
+        // For now, the interceptor handles refresh, so we just try to get profile
+        const userData = await authApi.getProfile();
+        setUser(userData);
       } catch (error) {
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
@@ -73,16 +63,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
     } else {
       try {
-        // Mock API call to get user data
-        // In a real implementation, this would call the backend
-        const mockUserData = {
-          _id: '123',
-          nome: 'Demo User',
-          email: 'demo@example.com',
-          grupos: ['group1'],
-        };
-        
-        setUser(mockUserData);
+        const userData = await authApi.getProfile();
+        setUser(userData);
       } catch (error) {
         setUser(null);
       }
@@ -100,31 +82,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       setIsLoading(true);
       
-      // Mock API call for login
-      // In a real implementation, this would call the backend
-      const mockUserData = {
-        _id: '123',
-        nome: 'Demo User',
-        email,
-        grupos: ['group1'],
-      };
-      
-      const mockTokens = {
-        token: 'mock-jwt-token',
-        refreshToken: 'mock-refresh-token',
-      };
+      const { user: userData, token, refreshToken } = await authApi.login(email, password);
       
       // Store tokens
-      localStorage.setItem('token', mockTokens.token);
-      localStorage.setItem('refreshToken', mockTokens.refreshToken);
+      localStorage.setItem('token', token);
+      localStorage.setItem('refreshToken', refreshToken);
       
       // Set user data
-      setUser(mockUserData);
+      setUser(userData);
       
       // Show success notification
       notifications.show({
         title: 'Login realizado com sucesso',
-        message: `Bem-vindo(a) ${mockUserData.nome}!`,
+        message: `Bem-vindo(a) ${userData.name}!`,
         color: 'green',
       });
       
@@ -133,7 +103,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     } catch (error: any) {
       notifications.show({
         title: 'Erro ao fazer login',
-        message: error.response?.data?.message || 'Verifique suas credenciais e tente novamente.',
+        message: error.response?.data?.error || 'Verifique suas credenciais e tente novamente.',
         color: 'red',
       });
     } finally {
@@ -146,8 +116,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       setIsLoading(true);
       
-      // Mock API call for register
-      // In a real implementation, this would call the backend
+      await authApi.register(name, email, password);
       
       // Show success notification
       notifications.show({
@@ -161,7 +130,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     } catch (error: any) {
       notifications.show({
         title: 'Erro ao cadastrar',
-        message: error.response?.data?.message || 'Ocorreu um erro ao criar sua conta.',
+        message: error.response?.data?.error || 'Ocorreu um erro ao criar sua conta.',
         color: 'red',
       });
     } finally {
@@ -187,8 +156,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       setIsLoading(true);
       
-      // Mock API call for forgot password
-      // In a real implementation, this would call the backend
+      await authApi.forgotPassword(email);
       
       // Show success notification
       notifications.show({
@@ -199,7 +167,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     } catch (error: any) {
       notifications.show({
         title: 'Erro ao enviar e-mail',
-        message: error.response?.data?.message || 'Não foi possível enviar o e-mail de recuperação.',
+        message: error.response?.data?.error || 'Não foi possível enviar o e-mail de recuperação.',
         color: 'red',
       });
     } finally {
@@ -212,8 +180,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       setIsLoading(true);
       
-      // Mock API call for reset password
-      // In a real implementation, this would call the backend
+      await authApi.resetPassword(token, password);
       
       // Show success notification
       notifications.show({
@@ -227,7 +194,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     } catch (error: any) {
       notifications.show({
         title: 'Erro ao redefinir senha',
-        message: error.response?.data?.message || 'Não foi possível redefinir sua senha.',
+        message: error.response?.data?.error || 'Não foi possível redefinir sua senha.',
         color: 'red',
       });
     } finally {

@@ -1,4 +1,3 @@
-
 # Dashboard Backend
 
 API backend para o sistema de dashboard com autenticação e gestão de usuários.
