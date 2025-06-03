@@ -194,7 +194,7 @@ export default function History() {
         {historyEntries.length > 0 ? (
           historyEntries.map((item) => renderHistoryItem(item))
         ) : (
-          <Text c="dimmed" ta="center" py="xl">
+          <Text c="dimmed\" ta="center\" py="xl">
             Nenhuma atividade recente para exibir.
           </Text>
         )}
