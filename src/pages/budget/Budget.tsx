@@ -33,7 +33,7 @@ import {
   PlannedItem,
 } from "../../types/budget";
 import { useCallback } from "react";
-import CurrencyInput from '../../components/ui/CurrencyInput';
+import CurrencyInput from "../../components/ui/CurrencyInput";
 
 // Define the schema for the new entry form
 const newEntrySchema = z.object({
@@ -203,70 +203,82 @@ export default function Budget() {
       </Group>
 
       <Grid>
-        {["renda", "despesa", "conta", "poupanca"].map((type) => (
-          <Grid.Col span={{ base: 12, md: 6, lg: 3 }} key={type}>
-            <Paper
-              p="md"
-              radius="md"
-              withBorder
-              className="h-full flex flex-col"
-            >
-              <Text size="lg" fw={700} mb="md" className="capitalize">
-                {type === "renda"
-                  ? "Rendas"
-                  : type === "despesa"
-                  ? "Despesas"
-                  : type === "conta"
-                  ? "Contas"
-                  : "Poupança"}
-              </Text>
-              <Divider mb="md" />
-              <div className="flex-1 overflow-y-auto pr-2">
-                {" "}
-                {/* Added pr-2 for scrollbar */}
-                {isLoading ? (
-                  <Text c="dimmed">Carregando...</Text>
-                ) : getCategoryItems(type as BudgetCategory["tipo"]).length >
-                  0 ? (
-                  <Stack gap="xs">
-                    {getCategoryItems(type as BudgetCategory["tipo"]).map(
-                      (item, index) => (
-                        <Group
-                          key={index}
-                          justify="space-between"
-                          wrap="nowrap"
-                        >
-                          <Text size="sm" className="truncate">
-                            {item.nome}
-                          </Text>
-                          <Text
-                            size="sm"
-                            fw={500}
-                            c={type === "renda" ? "green" : "red"}
-                            style={{ flexShrink: 0 }}
+        {["renda", "despesa", "conta", "poupanca"].map((type) => {
+          const typeColorMap: Record<string, string> = {
+            renda: "green",
+            poupanca: "blue",
+            despesa: "red",
+            conta: "orange",
+          };
+
+          const color = typeColorMap[type] || "gray";
+
+          return (
+            <Grid.Col span={{ base: 12, md: 6, lg: 3 }} key={type}>
+              <Paper
+                p="md"
+                radius="md"
+                withBorder
+                className="h-full flex flex-col"
+              >
+                <Text size="lg" fw={700} mb="md" className="capitalize">
+                  {type === "renda"
+                    ? "Rendas"
+                    : type === "despesa"
+                    ? "Despesas"
+                    : type === "conta"
+                    ? "Contas"
+                    : "Poupança"}
+                </Text>
+                <Divider mb="md" />
+                <div className="flex-1 overflow-y-auto pr-2">
+                  {" "}
+                  {isLoading ? (
+                    <Text c="dimmed">Carregando...</Text>
+                  ) : getCategoryItems(type as BudgetCategory["tipo"]).length >
+                    0 ? (
+                    <Stack gap="xs">
+                      {getCategoryItems(type as BudgetCategory["tipo"]).map(
+                        (item, index) => (
+                          <Group
+                            key={index}
+                            justify="space-between"
+                            wrap="nowrap"
                           >
-                            {formatCurrency(item.valorPlanejado)}
-                          </Text>
-                        </Group>
-                      )
+                            <Text size="sm" className="truncate">
+                              {item.nome}
+                            </Text>
+                            <Text
+                              size="sm"
+                              fw={500}
+                              c={color}
+                              style={{ flexShrink: 0 }}
+                            >
+                              {formatCurrency(item.valorPlanejado)}
+                            </Text>
+                          </Group>
+                        )
+                      )}
+                    </Stack>
+                  ) : (
+                    <Text c="dimmed">Nenhuma entrada planejada.</Text>
+                  )}
+                </div>
+                <Divider mt="md" />
+                <Group justify="space-between" mt="md">
+                  <Text size="md" fw={700}>
+                    Total Planejado:
+                  </Text>
+                  <Text size="md" fw={700} c={color}>
+                    {formatCurrency(
+                      totalPlanned(type as BudgetCategory["tipo"])
                     )}
-                  </Stack>
-                ) : (
-                  <Text c="dimmed">Nenhuma entrada planejada.</Text>
-                )}
-              </div>
-              <Divider mt="md" />
-              <Group justify="space-between" mt="md">
-                <Text size="md" fw={700}>
-                  Total Planejado:
-                </Text>
-                <Text size="md" fw={700} c={type === "renda" ? "green" : "red"}>
-                  {formatCurrency(totalPlanned(type as BudgetCategory["tipo"]))}
-                </Text>
-              </Group>
-            </Paper>
-          </Grid.Col>
-        ))}
+                  </Text>
+                </Group>
+              </Paper>
+            </Grid.Col>
+          );
+        })}
       </Grid>
 
       <Modal
