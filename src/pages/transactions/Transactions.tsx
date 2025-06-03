@@ -14,7 +14,8 @@ import {
   Stack,
   Modal,
 } from "@mantine/core";
-import { useForm, Controller } from "@mantine/form";
+import { useForm } from "@mantine/form";
+import { Controller } from "react-hook-form";
 import { DatePickerInput } from "@mantine/dates";
 import { motion } from "framer-motion";
 import {
