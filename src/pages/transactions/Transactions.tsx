@@ -10,12 +10,12 @@ import {
   Badge,
   TextInput,
   Select,
-  NumberInput,
   Stack,
   Modal,
 } from "@mantine/core";
-import { useForm } from "@mantine/form";
-import { Controller } from "react-hook-form";
+import { useForm, FormProvider, Controller } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { DatePickerInput } from "@mantine/dates";
 import { motion } from "framer-motion";
 import {
@@ -30,7 +30,19 @@ import { mockApi } from "../../services/api";
 import GroupSelector from "../../components/ui/GroupSelector";
 import { Transaction } from "../../types/transaction";
 import { Budget as BudgetType, PlannedItem } from "../../types/budget";
-import CurrencyInput from '../../components/ui/CurrencyInput';
+import CurrencyInput from "../../components/ui/CurrencyInput";
+
+// Define the schema for the transaction form
+const transactionSchema = z.object({
+  data: z.date({ required_error: "Data é obrigatória" }),
+  categoria: z.enum(["renda", "despesa", "conta", "poupanca"], {
+    required_error: "Categoria é obrigatória",
+  }),
+  tipo: z.string().min(1, "Tipo é obrigatório"),
+  valor: z.number().min(0.01, "O valor deve ser maior que zero"),
+});
+
+type TransactionFormValues = z.infer<typeof transactionSchema>;
 
 export default function Transactions() {
   const [selectedGroupId, setSelectedGroupId] = useState<string>("group1");
@@ -41,17 +53,13 @@ export default function Transactions() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [budget, setBudget] = useState<BudgetType | null>(null);
 
-  const form = useForm({
-    initialValues: {
+  const form = useForm<TransactionFormValues>({
+    resolver: zodResolver(transactionSchema),
+    defaultValues: {
       data: new Date(),
-      categoria: "",
+      categoria: "renda",
       tipo: "",
       valor: 0,
-    },
-    validate: {
-      categoria: (value) => (!value ? "Categoria é obrigatória" : null),
-      tipo: (value) => (!value ? "Tipo é obrigatório" : null),
-      valor: (value) => (value <= 0 ? "Valor deve ser maior que zero" : null),
     },
   });
 
@@ -88,7 +96,7 @@ export default function Transactions() {
     fetchTransactionsAndBudget();
   }, [selectedGroupId]);
 
-  const handleSubmit = async (values: typeof form.values) => {
+  const handleSubmit = async (values: TransactionFormValues) => {
     try {
       const newTransaction: Transaction = {
         _id: Math.random().toString(),
@@ -96,11 +104,7 @@ export default function Transactions() {
         criadoPor: "123",
         criadoPorNome: "Demo User",
         data: values.data.toISOString(),
-        categoria: values.categoria as
-          | "renda"
-          | "despesa"
-          | "conta"
-          | "poupanca",
+        categoria: values.categoria,
         tipo: values.tipo,
         valor: values.valor,
         createdAt: new Date().toISOString(),
@@ -287,59 +291,82 @@ export default function Transactions() {
         title="Novo Lançamento"
         size="md"
       >
-        <form onSubmit={form.onSubmit(handleSubmit)}>
-          <Stack>
-            <DatePickerInput
-              label="Data"
-              required
-              valueFormat="DD/MM/YYYY"
-              locale="pt-br"
-              placeholder="Selecione a data"
-              {...form.getInputProps("data")}
-            />
+        <FormProvider {...form}>
+          <form onSubmit={form.handleSubmit(handleSubmit)}>
+            <Stack>
+              <Controller
+                name="data"
+                control={form.control}
+                render={({ field }) => (
+                  <DatePickerInput
+                    label="Data"
+                    required
+                    valueFormat="DD/MM/YYYY"
+                    locale="pt-br"
+                    placeholder="Selecione a data"
+                    error={form.formState.errors.data?.message}
+                    {...field}
+                  />
+                )}
+              />
 
-            <Select
-              label="Categoria"
-              required
-              data={[
-                { value: "renda", label: "Receita" },
-                { value: "despesa", label: "Despesa" },
-                { value: "conta", label: "Conta" },
-                { value: "poupanca", label: "Poupança" },
-              ]}
-              {...form.getInputProps("categoria")}
-            />
+              <Controller
+                name="categoria"
+                control={form.control}
+                render={({ field }) => (
+                  <Select
+                    label="Categoria"
+                    required
+                    data={[
+                      { value: "renda", label: "Receita" },
+                      { value: "despesa", label: "Despesa" },
+                      { value: "conta", label: "Conta" },
+                      { value: "poupanca", label: "Poupança" },
+                    ]}
+                    error={form.formState.errors.categoria?.message}
+                    {...field}
+                  />
+                )}
+              />
 
-            <Select
-              label="Tipo"
-              required
-              placeholder="Selecione o tipo de lançamento"
-              data={availableTypes}
-              searchable
-              clearable
-              nothingFoundMessage="Nenhum tipo encontrado. Crie em Orçamento."
-              {...form.getInputProps("tipo")}
-            />
+              <Controller
+                name="tipo"
+                control={form.control}
+                render={({ field }) => (
+                  <Select
+                    label="Tipo"
+                    required
+                    placeholder="Selecione o tipo de lançamento"
+                    data={availableTypes}
+                    searchable
+                    clearable
+                    nothingFoundMessage="Nenhum tipo encontrado. Crie em Orçamento."
+                    error={form.formState.errors.tipo?.message}
+                    {...field}
+                  />
+                )}
+              />
 
-            <Controller
-              name="valor"
-              control={form.control}
-              render={({ field }) => (
-                <CurrencyInput
-                  label="Valor"
-                  required
-                  error={form.errors.valor?.message}
-                  value={field.value}
-                  onChange={(val) => field.onChange(val)}
-                />
-              )}
-            />
+              <Controller
+                name="valor"
+                control={form.control}
+                render={({ field }) => (
+                  <CurrencyInput
+                    label="Valor"
+                    required
+                    error={form.formState.errors.valor?.message}
+                    value={field.value}
+                    onChange={(val) => field.onChange(val)}
+                  />
+                )}
+              />
 
-            <Button type="submit" fullWidth mt="md">
-              Salvar
-            </Button>
-          </Stack>
-        </form>
+              <Button type="submit" fullWidth mt="md">
+                Salvar
+              </Button>
+            </Stack>
+          </form>
+        </FormProvider>
       </Modal>
     </motion.div>
   );
