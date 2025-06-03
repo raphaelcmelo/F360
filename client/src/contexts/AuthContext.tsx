@@ -1,9 +1,16 @@
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { notifications } from '@mantine/notifications';
-import { jwtDecode } from 'jwt-decode';
-import { authApi } from '../services/api'; // Import authApi
-import { User } from '../types/user';
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  ReactNode,
+} from "react";
+import { useNavigate } from "react-router-dom";
+import { notifications } from "@mantine/notifications";
+import { jwtDecode } from "jwt-decode";
+import { authApi } from "../services/api"; // Import authApi
+import { User } from "../types/user";
 
 interface AuthContextType {
   user: User | null;
@@ -41,8 +48,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // Check if user is authenticated on initial load
   const checkAuth = useCallback(async () => {
     setIsLoading(true);
-    const token = localStorage.getItem('token');
-    const refreshToken = localStorage.getItem('refreshToken');
+    const token = localStorage.getItem("token");
+    const refreshToken = localStorage.getItem("refreshToken");
 
     if (!token || isTokenExpired(token)) {
       if (!refreshToken || isTokenExpired(refreshToken)) {
@@ -57,8 +64,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         const userData = await authApi.getProfile();
         setUser(userData);
       } catch (error) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('refreshToken');
+        localStorage.removeItem("token");
+        localStorage.removeItem("refreshToken");
         setUser(null);
       }
     } else {
@@ -69,7 +76,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setUser(null);
       }
     }
-    
+
     setIsLoading(false);
   }, []);
 
@@ -81,30 +88,36 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const login = async (email: string, password: string) => {
     try {
       setIsLoading(true);
-      
-      const { user: userData, token, refreshToken } = await authApi.login(email, password);
-      
+
+      const {
+        user: userData,
+        token,
+        refreshToken,
+      } = await authApi.login(email, password);
+
       // Store tokens
-      localStorage.setItem('token', token);
-      localStorage.setItem('refreshToken', refreshToken);
-      
+      localStorage.setItem("token", token);
+      localStorage.setItem("refreshToken", refreshToken);
+
       // Set user data
       setUser(userData);
-      
+
       // Show success notification
       notifications.show({
-        title: 'Login realizado com sucesso',
+        title: "Login realizado com sucesso",
         message: `Bem-vindo(a) ${userData.name}!`,
-        color: 'green',
+        color: "green",
       });
-      
+
       // Navigate to dashboard
-      navigate('/dashboard');
+      navigate("/dashboard");
     } catch (error: any) {
       notifications.show({
-        title: 'Erro ao fazer login',
-        message: error.response?.data?.error || 'Verifique suas credenciais e tente novamente.',
-        color: 'red',
+        title: "Erro ao fazer login",
+        message:
+          error.response?.data?.error ||
+          "Verifique suas credenciais e tente novamente.",
+        color: "red",
       });
     } finally {
       setIsLoading(false);
@@ -115,23 +128,24 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const register = async (name: string, email: string, password: string) => {
     try {
       setIsLoading(true);
-      
+
       await authApi.register(name, email, password);
-      
+
       // Show success notification
       notifications.show({
-        title: 'Cadastro realizado com sucesso',
-        message: 'Você já pode fazer login com suas credenciais.',
-        color: 'green',
+        title: "Cadastro realizado com sucesso",
+        message: "Você já pode fazer login com suas credenciais.",
+        color: "green",
       });
-      
+
       // Navigate to login
-      navigate('/login');
+      navigate("/login");
     } catch (error: any) {
       notifications.show({
-        title: 'Erro ao cadastrar',
-        message: error.response?.data?.error || 'Ocorreu um erro ao criar sua conta.',
-        color: 'red',
+        title: "Erro ao cadastrar",
+        message:
+          error.response?.data?.error || "Ocorreu um erro ao criar sua conta.",
+        color: "red",
       });
     } finally {
       setIsLoading(false);
@@ -139,36 +153,58 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   // Logout function
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    setUser(null);
-    navigate('/login');
-    notifications.show({
-      title: 'Logout realizado',
-      message: 'Você saiu da sua conta com sucesso.',
-      color: 'blue',
-    });
+  const logout = async () => {
+    try {
+      setIsLoading(true);
+      await authApi.logout(); // Call backend logout endpoint
+      localStorage.removeItem("token");
+      localStorage.removeItem("refreshToken");
+      setUser(null);
+      navigate("/login");
+      notifications.show({
+        title: "Logout realizado",
+        message: "Você saiu da sua conta com sucesso.",
+        color: "blue",
+      });
+    } catch (error: any) {
+      console.error("Error during logout:", error);
+      // Even if backend logout fails, clear client-side tokens for security
+      localStorage.removeItem("token");
+      localStorage.removeItem("refreshToken");
+      setUser(null);
+      navigate("/login");
+      notifications.show({
+        title: "Erro ao fazer logout",
+        message:
+          error.response?.data?.error ||
+          "Ocorreu um erro ao sair da sua conta. Por favor, tente novamente.",
+        color: "red",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Forgot password function
   const forgotPassword = async (email: string) => {
     try {
       setIsLoading(true);
-      
+
       await authApi.forgotPassword(email);
-      
+
       // Show success notification
       notifications.show({
-        title: 'E-mail enviado',
-        message: 'Verifique sua caixa de entrada para redefinir sua senha.',
-        color: 'green',
+        title: "E-mail enviado",
+        message: "Verifique sua caixa de entrada para redefinir sua senha.",
+        color: "green",
       });
     } catch (error: any) {
       notifications.show({
-        title: 'Erro ao enviar e-mail',
-        message: error.response?.data?.error || 'Não foi possível enviar o e-mail de recuperação.',
-        color: 'red',
+        title: "Erro ao enviar e-mail",
+        message:
+          error.response?.data?.error ||
+          "Não foi possível enviar o e-mail de recuperação.",
+        color: "red",
       });
     } finally {
       setIsLoading(false);
@@ -179,23 +215,26 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const resetPassword = async (token: string, password: string) => {
     try {
       setIsLoading(true);
-      
+
       await authApi.resetPassword(token, password);
-      
+
       // Show success notification
       notifications.show({
-        title: 'Senha redefinida',
-        message: 'Sua senha foi alterada com sucesso. Você já pode fazer login.',
-        color: 'green',
+        title: "Senha redefinida",
+        message:
+          "Sua senha foi alterada com sucesso. Você já pode fazer login.",
+        color: "green",
       });
-      
+
       // Navigate to login
-      navigate('/login');
+      navigate("/login");
     } catch (error: any) {
       notifications.show({
-        title: 'Erro ao redefinir senha',
-        message: error.response?.data?.error || 'Não foi possível redefinir sua senha.',
-        color: 'red',
+        title: "Erro ao redefinir senha",
+        message:
+          error.response?.data?.error ||
+          "Não foi possível redefinir sua senha.",
+        color: "red",
       });
     } finally {
       setIsLoading(false);
@@ -225,7 +264,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

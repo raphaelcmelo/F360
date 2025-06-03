@@ -264,3 +264,25 @@ export const resetPassword = async (
     });
   }
 };
+
+export const logout = async (
+  req: AuthenticatedRequest,
+  res: Response<ApiResponse>
+): Promise<void> => {
+  try {
+    // For JWTs, logout is primarily client-side by removing the token.
+    // If using refresh tokens, you might invalidate the refresh token here.
+    // For this implementation, we'll just send a success response.
+    // The client-side will handle clearing the tokens.
+    res.status(200).json({
+      success: true,
+      message: "Logout successful",
+    });
+  } catch (error: any) {
+    console.error("Logout Error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Server error during logout",
+    });
+  }
+};

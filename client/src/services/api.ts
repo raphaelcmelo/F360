@@ -75,7 +75,11 @@ export const authApi = {
   },
 
   register: async (name: string, email: string, password: string) => {
-    const response = await api.post("/auth/register", { name, email, password });
+    const response = await api.post("/auth/register", {
+      name,
+      email,
+      password,
+    });
     return response.data;
   },
 
@@ -90,7 +94,14 @@ export const authApi = {
   },
 
   resetPassword: async (token: string, password: string) => {
-    const response = await api.post(`/auth/reset-password/${token}`, { password });
+    const response = await api.post(`/auth/reset-password/${token}`, {
+      password,
+    });
+    return response.data;
+  },
+
+  logout: async () => {
+    const response = await api.post("/auth/logout");
     return response.data;
   },
 };
