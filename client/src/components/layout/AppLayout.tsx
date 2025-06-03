@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useState } from "react";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   AppShell,
   Burger,
@@ -12,10 +12,16 @@ import {
   useMantineColorScheme,
   ActionIcon,
   rem,
-} from '@mantine/core';
-import { IconLogout, IconUserCircle, IconSun, IconMoon, IconSettings } from '@tabler/icons-react';
-import { useAuth } from '../../contexts/AuthContext';
-import Sidebar from './Sidebar';
+} from "@mantine/core";
+import {
+  IconLogout,
+  IconUserCircle,
+  IconSun,
+  IconMoon,
+  IconSettings,
+} from "@tabler/icons-react";
+import { useAuth } from "../../contexts/AuthContext";
+import Sidebar from "./Sidebar";
 
 export default function AppLayout() {
   const [opened, setOpened] = useState(false);
@@ -25,21 +31,23 @@ export default function AppLayout() {
   const { colorScheme, setColorScheme } = useMantineColorScheme();
 
   const toggleColorScheme = () => {
-    setColorScheme(colorScheme === 'dark' ? 'light' : 'dark');
+    setColorScheme(colorScheme === "dark" ? "light" : "dark");
   };
+
+  console.log(user);
 
   // Get page title based on current route
   const getPageTitle = () => {
     const path = location.pathname;
-    
-    if (path.includes('/dashboard')) return 'Dashboard';
-    if (path.includes('/orcamento')) return 'Orçamento Mensal';
-    if (path.includes('/lancamentos')) return 'Lançamentos';
-    if (path.includes('/meus-grupos')) return 'Meus Grupos';
-    if (path.includes('/grupo/')) return 'Detalhes do Grupo';
-    if (path.includes('/historico')) return 'Histórico';
-    
-    return 'Finanças360';
+
+    if (path.includes("/dashboard")) return "Dashboard";
+    if (path.includes("/orcamento")) return "Orçamento Mensal";
+    if (path.includes("/lancamentos")) return "Lançamentos";
+    if (path.includes("/meus-grupos")) return "Meus Grupos";
+    if (path.includes("/grupo/")) return "Detalhes do Grupo";
+    if (path.includes("/historico")) return "Histórico";
+
+    return "Finanças360";
   };
 
   return (
@@ -47,7 +55,7 @@ export default function AppLayout() {
       header={{ height: 60 }}
       navbar={{
         width: 300,
-        breakpoint: 'sm',
+        breakpoint: "sm",
         collapsed: { mobile: !opened },
       }}
       padding="md"
@@ -74,26 +82,22 @@ export default function AppLayout() {
               radius="xl"
               color="blue"
             >
-              {colorScheme === 'dark' ? (
+              {colorScheme === "dark" ? (
                 <IconSun size={18} />
               ) : (
                 <IconMoon size={18} />
               )}
             </ActionIcon>
 
-            <Menu
-              shadow="md"
-              width={200}
-              position="bottom-end"
-            >
+            <Menu shadow="md" width={200} position="bottom-end">
               <Menu.Target>
                 <Button variant="subtle" px={8}>
                   <Group gap={8}>
                     <Avatar color="blue" radius="xl" size="sm">
-                      {user?.nome.charAt(0)}
+                      {user?.name?.charAt(0)}
                     </Avatar>
                     <Text size="sm" fw={500} visibleFrom="sm">
-                      {user?.nome}
+                      {user?.name}
                     </Text>
                   </Group>
                 </Button>
@@ -102,19 +106,27 @@ export default function AppLayout() {
               <Menu.Dropdown>
                 <Menu.Label>Conta</Menu.Label>
                 <Menu.Item
-                  leftSection={<IconUserCircle style={{ width: rem(14), height: rem(14) }} />}
+                  leftSection={
+                    <IconUserCircle
+                      style={{ width: rem(14), height: rem(14) }}
+                    />
+                  }
                 >
                   Meu Perfil
                 </Menu.Item>
                 <Menu.Item
-                  leftSection={<IconSettings style={{ width: rem(14), height: rem(14) }} />}
+                  leftSection={
+                    <IconSettings style={{ width: rem(14), height: rem(14) }} />
+                  }
                 >
                   Configurações
                 </Menu.Item>
                 <Menu.Divider />
                 <Menu.Item
                   color="red"
-                  leftSection={<IconLogout style={{ width: rem(14), height: rem(14) }} />}
+                  leftSection={
+                    <IconLogout style={{ width: rem(14), height: rem(14) }} />
+                  }
                   onClick={logout}
                 >
                   Sair
