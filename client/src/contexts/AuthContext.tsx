@@ -10,8 +10,14 @@ import { useNavigate } from "react-router-dom";
 import { notifications } from "@mantine/notifications";
 import { jwtDecode } from "jwt-decode";
 import { authApi } from "../services/api"; // Import authApi
-import { User } from "../types/user";
 import { Group } from "../types/group"; // Import Group type
+
+// Define a type for the structure of each group entry in the user's 'grupos' array from the backend
+interface UserGroupEntry {
+  groupId: Group; // This refers to the actual Group interface from types/group
+  displayName: string;
+  _id: string; // This is the _id of the embedded document, not the actual group ID
+}
 
 interface AuthContextType {
   user: User | null;
@@ -31,14 +37,14 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-// Update User interface to correctly type 'grupos'
+// Update User interface to correctly type 'grupos' based on backend response
 interface User {
   _id: string;
   name: string;
   email: string;
   role: string;
   isActive: boolean;
-  grupos: Group[]; // Changed to Group[]
+  grupos: UserGroupEntry[]; // Changed to UserGroupEntry[]
   createdAt: string;
   updatedAt: string;
 }

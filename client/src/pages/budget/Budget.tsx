@@ -29,7 +29,7 @@ import { budgetApi, plannedBudgetItemApi } from "../../services/api"; // Import 
 import GroupSelector from "../../components/ui/GroupSelector";
 import { Budget as BudgetType, PlannedBudgetItem } from "../../types/budget"; // Use PlannedBudgetItem from types
 import { useAuth } from "../../contexts/AuthContext";
-import { Group as BudgetGroupType } from "../../types/group";
+import { Group as BudgetGroupType } from "../../types/group"; // Import Group type as BudgetGroupType
 import CurrencyInput from "../../components/ui/CurrencyInput";
 
 // Define the schema for the new entry form
@@ -85,14 +85,16 @@ export default function Budget() {
   // Effect to set groups and initial selectedGroupId when user data is available
   useEffect(() => {
     if (!isAuthLoading && user?.grupos) {
+      // Map the backend's UserGroupEntry to the Group type expected by GroupSelector
       const mappedGroups: BudgetGroupType[] = user.grupos.map((g) => ({
-        _id: g._id,
-        nome: g.displayName,
+        _id: g.groupId._id, // CORRECTED: Use g.groupId._id to get the actual group ID
+        nome: g.groupId.nome,
         displayName: g.displayName,
-        membros: [],
-        criadoPor: "",
-        orcamentos: [],
-        createdAt: "",
+        membros: g.groupId.membros,
+        criadoPor: g.groupId.criadoPor,
+        orcamentos: g.groupId.orcamentos,
+        createdAt: g.groupId.createdAt,
+        updatedAt: g.groupId.updatedAt,
       }));
       setGroups(mappedGroups);
       if (mappedGroups.length > 0) {
@@ -109,7 +111,7 @@ export default function Budget() {
       setGroups([]);
       setSelectedGroupId("");
     }
-  }, [user, isAuthLoading]);
+  }, [user, isAuthLoading, selectedGroupId]); // Added selectedGroupId to dependencies
 
   const fetchBudget = useCallback(async () => {
     if (!selectedGroupId || !user?._id) {

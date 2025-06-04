@@ -10,6 +10,7 @@ import authRoutes from "./routes/auth";
 import userRoutes from "./routes/users";
 import budgetRoutes from "./routes/budgetRoutes"; // Import budget routes
 import groupRoutes from "./routes/groupRoutes"; // Import group routes
+import budgetItemRoutes from "./routes/budgetItemRoutes"; // Import budget item routes
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -42,6 +43,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/groups", groupRoutes);
 app.use("/api/budgets", budgetRoutes);
+app.use("/api/budget-items", budgetItemRoutes);
 
 // Health check
 app.get("/api/health", (req, res) => {
