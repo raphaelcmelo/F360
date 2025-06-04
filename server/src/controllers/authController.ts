@@ -45,7 +45,10 @@ export const register = async (
     });
 
     // Link the user to their new personal group
-    user.grupos.push(personalGroup._id);
+    user.grupos.push({
+      groupId: personalGroup._id,
+      displayName: personalGroup.nome,
+    }); // Store groupId and displayName
     await user.save();
 
     const token = generateToken(user._id);
@@ -85,8 +88,8 @@ export const login = async (
 
     // Populate the 'grupos' field when fetching the user
     const user = await User.findOne({ email: validatedData.email })
-      .select("+password")
-      .populate("grupos"); // Populate the groups
+      .select("+password") // Explicitly select password for comparison
+      .populate("grupos.groupId"); // Populate the groups
 
     if (!user || !user.isActive) {
       res.status(401).json({
@@ -142,7 +145,7 @@ export const getProfile = async (
     // If req.user is set by a middleware, that middleware should populate 'grupos'
     // For now, assuming req.user is already populated or we don't need groups here.
     // If not populated, you might need to fetch it again:
-    const user = await User.findById(req.user?._id).populate('grupos');
+    const user = await User.findById(req.user?._id).populate("grupos.groupId");
     if (!user) {
       res.status(404).json({ success: false, error: "User not found" });
       return;
@@ -153,7 +156,9 @@ export const getProfile = async (
     });
   } catch (error: any) {
     console.error("Get Profile Error:", error);
-    res.status(500).json({ success: false, error: "Server error fetching profile" });
+    res
+      .status(500)
+      .json({ success: false, error: "Server error fetching profile" });
   }
 };
 
@@ -252,7 +257,7 @@ export const resetPassword = async (
     const user = await User.findOne({
       passwordResetToken: hashedToken,
       passwordResetExpires: { $gt: Date.now() },
-    }).select("+passwordResetToken +passwordResetExpires");
+    }).select("+passwordResetToken +passwordResetExpires +password"); // Also select password to ensure pre-save hook works
 
     if (!user) {
       res.status(400).json({
@@ -314,6 +319,31 @@ export const logout = async (
     res.status(500).json({
       success: false,
       error: "Server error during logout",
+    });
+  }
+};
+export const getUserGroups = async (
+  req: AuthenticatedRequest,
+  res: Response<ApiResponse>
+): Promise<void> => {
+  try {
+    const user = await User.findById(req.user?._id).populate("grupos.groupId");
+    if (!user) {
+      res.status(404).json({ success: false, error: "User not found" });
+      return;
+    }
+    res.json({
+      success: true,
+      data: user.grupos.map((group) => ({
+        groupId: group.groupId._id,
+        displayName: group.displayName,
+      })),
+    });
+  } catch (error: any) {
+    console.error("Get User Groups Error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Server error fetching user groups",
     });
   }
 };

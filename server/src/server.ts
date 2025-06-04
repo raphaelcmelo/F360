@@ -8,6 +8,7 @@ import connectDB from "./config/database";
 // Import routes
 import authRoutes from "./routes/auth";
 import userRoutes from "./routes/users";
+import groupRoutes from "./routes/groupRoutes"; // Import group routes
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -38,6 +39,7 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/groups", groupRoutes); // Use group routes
 
 // Health check
 app.get("/api/health", (req, res) => {
