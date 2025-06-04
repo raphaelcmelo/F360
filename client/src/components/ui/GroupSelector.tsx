@@ -1,5 +1,5 @@
-import { Select } from '@mantine/core';
-import { Group as BudgetGroupType } from '../../types/user'; // Alias Group to BudgetGroupType
+import { Select, SelectItem } from "@mantine/core";
+import { Group as BudgetGroupType } from "../../types/group"; // Corrected import path
 
 interface GroupSelectorProps {
   value: string;
@@ -7,10 +7,15 @@ interface GroupSelectorProps {
   groups: BudgetGroupType[];
 }
 
-export default function GroupSelector({ value, onChange, groups }: GroupSelectorProps) {
-  const data = groups.map((group) => ({
+export default function GroupSelector({
+  value,
+  onChange,
+  groups,
+}: GroupSelectorProps) {
+  // Ensure groups is always an array before mapping
+  const data = (groups || []).map((group) => ({
     value: group._id,
-    label: group.displayName, // Use displayName directly as it's guaranteed to exist now
+    label: group.displayName,
   }));
 
   return (
@@ -18,7 +23,16 @@ export default function GroupSelector({ value, onChange, groups }: GroupSelector
       placeholder="Selecione um grupo"
       data={data}
       value={value}
-      onChange={onChange}
+      onChange={(val: string | null, option: SelectItem) => {
+        console.log(
+          "GroupSelector onChange received val:",
+          val,
+          "Type:",
+          typeof val
+        );
+        console.log("GroupSelector onChange received option:", option);
+        onChange(val);
+      }}
       searchable
       nothingFoundMessage="Nenhum grupo encontrado"
       allowDeselect={false}

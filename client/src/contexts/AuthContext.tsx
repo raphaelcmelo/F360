@@ -11,6 +11,7 @@ import { notifications } from "@mantine/notifications";
 import { jwtDecode } from "jwt-decode";
 import { authApi } from "../services/api"; // Import authApi
 import { User } from "../types/user";
+import { Group } from "../types/group"; // Import Group type
 
 interface AuthContextType {
   user: User | null;
@@ -28,6 +29,18 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 interface AuthProviderProps {
   children: ReactNode;
+}
+
+// Update User interface to correctly type 'grupos'
+interface User {
+  _id: string;
+  name: string;
+  email: string;
+  role: string;
+  isActive: boolean;
+  grupos: Group[]; // Changed to Group[]
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {

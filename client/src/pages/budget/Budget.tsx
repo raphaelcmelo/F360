@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Grid,
   Paper,
@@ -32,7 +32,8 @@ import {
   BudgetCategory,
   PlannedItem,
 } from "../../types/budget";
-import { useCallback } from "react";
+import { useAuth } from "../../contexts/AuthContext";
+import { Group as BudgetGroupType } from "../../types/group";
 import CurrencyInput from "../../components/ui/CurrencyInput";
 
 // Define the schema for the new entry form
@@ -49,9 +50,11 @@ const newEntrySchema = z.object({
 type NewEntryFormValues = z.infer<typeof newEntrySchema>;
 
 export default function Budget() {
-  const [selectedGroupId, setSelectedGroupId] = useState<string>("group1");
+  const { user, isLoading: isAuthLoading } = useAuth();
+  const [groups, setGroups] = useState<BudgetGroupType[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const [budget, setBudget] = useState<BudgetType | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isBudgetLoading, setIsBudgetLoading] = useState(false);
   const [modalOpened, { open: openModal, close: closeModal }] =
     useDisclosure(false);
 
@@ -69,8 +72,50 @@ export default function Budget() {
     },
   });
 
+  // Effect to set groups and initial selectedGroupId when user data is available
+  useEffect(() => {
+    if (!isAuthLoading && user?.grupos) {
+      // Map user.grupos to BudgetGroupType, assuming groupId is _id and displayName is nome
+      const mappedGroups: BudgetGroupType[] = user.grupos.map((g) => ({
+        _id: g._id, // Changed from g.groupId to g._id
+        nome: g.displayName,
+        displayName: g.displayName,
+        membros: [],
+        criadoPor: "",
+        orcamentos: [],
+        createdAt: "",
+      }));
+      setGroups(mappedGroups);
+      if (mappedGroups.length > 0) {
+        // Set initial selectedGroupId if it's not set or if the current one is no longer valid
+        // Removed selectedGroupId from dependency array to prevent re-triggering on its own changes
+        const currentIdIsValid = mappedGroups.some(
+          (g) => g._id === selectedGroupId
+        );
+        if (!selectedGroupId || !currentIdIsValid) {
+          console.log(
+            "Setting initial selectedGroupId to:",
+            mappedGroups[0]._id
+          ); // Added log
+          setSelectedGroupId(mappedGroups[0]._id); // FIX: Set _id as string
+        }
+      } else {
+        setSelectedGroupId("");
+      }
+    } else if (!isAuthLoading && !user?.grupos) {
+      setGroups([]);
+      setSelectedGroupId("");
+    }
+  }, [user, isAuthLoading]); // Removed selectedGroupId from dependencies
+
   const fetchBudget = useCallback(async () => {
-    setIsLoading(true);
+    if (!selectedGroupId) {
+      setBudget(null);
+      setIsBudgetLoading(false);
+      return;
+    }
+
+    setIsBudgetLoading(true);
     try {
       const budgetData = await mockApi.budgets.getByGroup(selectedGroupId);
       setBudget({
@@ -82,15 +127,20 @@ export default function Budget() {
       });
     } catch (error) {
       console.error("Error fetching budget:", error);
-      setBudget(null); // Clear budget on error
+      setBudget(null); // Set budget to null on error to display empty state
     } finally {
-      setIsLoading(false);
+      setIsBudgetLoading(false);
     }
   }, [selectedGroupId]);
 
   useEffect(() => {
-    fetchBudget();
-  }, [fetchBudget]);
+    if (selectedGroupId && !isAuthLoading) {
+      fetchBudget();
+    } else if (!selectedGroupId && !isAuthLoading) {
+      setBudget(null);
+      setIsBudgetLoading(false);
+    }
+  }, [fetchBudget, selectedGroupId, isAuthLoading]);
 
   const handleAddPlannedItem = (data: NewEntryFormValues) => {
     if (!budget) return;
@@ -116,7 +166,6 @@ export default function Budget() {
         return category;
       });
 
-      // If the category didn't exist, add it (though mock API always provides all types)
       if (!updatedCategories.some((cat) => cat.tipo === data.categoryType)) {
         updatedCategories.push({
           tipo: data.categoryType,
@@ -131,7 +180,7 @@ export default function Budget() {
     });
 
     closeModal();
-    reset(); // Reset form fields after submission
+    reset();
   };
 
   const getCategoryItems = (type: BudgetCategory["tipo"]) => {
@@ -155,6 +204,43 @@ export default function Budget() {
     );
   };
 
+  // --- Debugging Logs ---
+  console.log("Budget Component Render - isAuthLoading:", isAuthLoading);
+  console.log("Budget Component Render - user:", user);
+  console.log("Budget Component Render - user.grupos:", user?.grupos);
+  console.log("Budget Component Render - groups state:", groups);
+  console.log("Budget Component Render - selectedGroupId:", selectedGroupId);
+  // --- End Debugging Logs ---
+
+  if (isAuthLoading) {
+    return (
+      <motion.div
+        className="page-transition"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3 }}
+      >
+        <Text>Carregando dados do usuário...</Text>
+      </motion.div>
+    );
+  }
+
+  if (!user?.grupos || user.grupos.length === 0) {
+    return (
+      <motion.div
+        className="page-transition"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3 }}
+      >
+        <Text>
+          Você não pertence a nenhum grupo. Crie ou junte-se a um grupo para
+          visualizar o orçamento.
+        </Text>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div
       className="page-transition"
@@ -163,14 +249,18 @@ export default function Budget() {
       transition={{ duration: 0.3 }}
     >
       <Group justify="space-between" mb="xl">
-        <GroupSelector value={selectedGroupId} onChange={setSelectedGroupId} />
+        <GroupSelector
+          value={selectedGroupId}
+          onChange={setSelectedGroupId}
+          groups={groups}
+        />
 
         <Group>
           <Button
             variant="light"
             leftSection={<IconRefresh size={16} />}
             onClick={fetchBudget}
-            loading={isLoading}
+            loading={isBudgetLoading}
           >
             Atualizar
           </Button>
@@ -179,7 +269,7 @@ export default function Budget() {
             variant="filled"
             leftSection={<IconPlus size={16} />}
             onClick={() => {
-              reset(); // Reset form before opening
+              reset();
               openModal();
             }}
           >
@@ -233,7 +323,7 @@ export default function Budget() {
                 <Divider mb="md" />
                 <div className="flex-1 overflow-y-auto pr-2">
                   {" "}
-                  {isLoading ? (
+                  {isBudgetLoading ? (
                     <Text c="dimmed">Carregando...</Text>
                   ) : getCategoryItems(type as BudgetCategory["tipo"]).length >
                     0 ? (
