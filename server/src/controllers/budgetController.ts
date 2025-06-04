@@ -42,12 +42,10 @@ export const createBudget = async (
     });
 
     if (existingBudget) {
-      return res
-        .status(409)
-        .json({
-          success: false,
-          error: "Um orçamento para este grupo e período já existe.",
-        });
+      return res.status(409).json({
+        success: false,
+        error: "Um orçamento para este grupo e período já existe.",
+      });
     }
 
     const newBudget = await Budget.create({
@@ -68,13 +66,11 @@ export const createBudget = async (
     });
   } catch (error: any) {
     if (error.name === "ZodError") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "Validation error",
-          details: error.errors,
-        });
+      return res.status(400).json({
+        success: false,
+        error: "Validation error",
+        details: error.errors,
+      });
     }
     console.error("Error creating budget:", error);
     res
@@ -109,17 +105,39 @@ export const getBudgetById = async (
     // Verify if the user is a member of the group associated with this budget
     const group = await Group.findById(budget.grupoId);
     if (!group || !group.membros.some((memberId) => memberId.equals(userId))) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          error: "Você não tem permissão para acessar este orçamento.",
-        });
+      return res.status(403).json({
+        success: false,
+        error: "Você não tem permissão para acessar este orçamento.",
+      });
     }
+
+    // Fetch planned budget items for this budget
+    const plannedItems = await PlannedBudgetItem.find({
+      budgetId: budget._id,
+    }).lean();
+
+    // Calculate aggregated totals for each category type
+    const aggregatedTotals = plannedItems.reduce(
+      (acc, item) => {
+        acc[item.categoryType] =
+          (acc[item.categoryType] || 0) + item.valorPlanejado;
+        return acc;
+      },
+      { renda: 0, despesa: 0, conta: 0, poupanca: 0 }
+    );
+
+    // Add aggregated totals to the budget object
+    const budgetWithTotals = {
+      ...budget,
+      totalRendaPlanejado: aggregatedTotals.renda,
+      totalDespesaPlanejado: aggregatedTotals.despesa,
+      totalContaPlanejado: aggregatedTotals.conta,
+      totalPoupancaPlanejado: aggregatedTotals.poupanca,
+    };
 
     res.status(200).json({
       success: true,
-      data: budget,
+      data: budgetWithTotals, // Send the enriched budget
       message: "Orçamento encontrado com sucesso.",
     });
   } catch (error: any) {
@@ -160,13 +178,10 @@ export const getGroupBudgets = async (
 
     if (!group) {
       console.log("DEBUG: getGroupBudgets - Group not found, returning 403.");
-      return res
-        .status(403)
-        .json({
-          success: false,
-          error:
-            "Você não tem permissão para acessar os orçamentos deste grupo.",
-        });
+      return res.status(403).json({
+        success: false,
+        error: "Você não tem permissão para acessar os orçamentos deste grupo.",
+      });
     }
 
     const isMember = group.membros.some((memberId) => memberId.equals(userId));
@@ -183,13 +198,10 @@ export const getGroupBudgets = async (
       console.log(
         "DEBUG: getGroupBudgets - User is not a member, returning 403."
       );
-      return res
-        .status(403)
-        .json({
-          success: false,
-          error:
-            "Você não tem permissão para acessar os orçamentos deste grupo.",
-        });
+      return res.status(403).json({
+        success: false,
+        error: "Você não tem permissão para acessar os orçamentos deste grupo.",
+      });
     }
 
     const budgets = await Budget.find({ grupoId: groupId })
@@ -235,12 +247,10 @@ export const deleteBudget = async (
 
     // Only the creator of the budget can delete it
     if (!budget.criadoPor.equals(userId)) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          error: "Você não tem permissão para deletar este orçamento.",
-        });
+      return res.status(403).json({
+        success: false,
+        error: "Você não tem permissão para deletar este orçamento.",
+      });
     }
 
     // Delete all planned budget items associated with this budget

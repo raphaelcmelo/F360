@@ -1,17 +1,41 @@
-import { useState, useEffect } from 'react';
-import { Grid, Paper, Text, SimpleGrid, Button, Group, ActionIcon, Menu, Stack, Alert, Modal, TextInput } from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
-import { motion } from 'framer-motion';
-import { IconDotsVertical, IconDownload, IconRefresh, IconInfoCircle } from '@tabler/icons-react';
-import { mockApi, groupApi, authApi } from '../../services/api';
-import BudgetSummaryCard from './components/BudgetSummaryCard';
-import CategoryDistributionChart from './components/CategoryDistributionChart';
-import BudgetVsActualChart from './components/BudgetVsActualChart';
-import RecentTransactionsTable from './components/RecentTransactionsTable';
-import GroupSelector from '../../components/ui/GroupSelector';
-import { Budget } from '../../types/budget';
-import { Transaction } from '../../types/transaction';
-import { Group as BudgetGroupType, User } from '../../types/user';
+import { useState, useEffect } from "react";
+import {
+  Grid,
+  Paper,
+  Text,
+  SimpleGrid,
+  Button,
+  Group,
+  ActionIcon,
+  Menu,
+  Stack,
+  Alert,
+  Modal,
+  TextInput,
+} from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
+import { motion } from "framer-motion";
+import {
+  IconDotsVertical,
+  IconDownload,
+  IconRefresh,
+  IconInfoCircle,
+} from "@tabler/icons-react";
+import {
+  mockApi,
+  groupApi,
+  authApi,
+  budgetApi,
+  plannedBudgetItemApi,
+} from "../../services/api"; // Ensure plannedBudgetItemApi is imported
+import BudgetSummaryCard from "./components/BudgetSummaryCard";
+import CategoryDistributionChart from "./components/CategoryDistributionChart";
+import BudgetVsActualChart from "./components/BudgetVsActualChart";
+import RecentTransactionsTable from "./components/RecentTransactionsTable";
+import GroupSelector from "../../components/ui/GroupSelector";
+import { Budget, PlannedBudgetItem, BudgetCategory } from "../../types/budget"; // Import BudgetCategory
+import { Transaction } from "../../types/transaction";
+import { Group as BudgetGroupType, User } from "../../types/user";
 
 export default function Dashboard() {
   const [userGroups, setUserGroups] = useState<BudgetGroupType[]>([]);
@@ -22,8 +46,11 @@ export default function Dashboard() {
   const [hasNoGroups, setHasNoGroups] = useState(false);
 
   // State for Create Group Modal
-  const [createGroupModalOpened, { open: openCreateGroupModal, close: closeCreateGroupModal }] = useDisclosure(false);
-  const [newGroupName, setNewGroupName] = useState('');
+  const [
+    createGroupModalOpened,
+    { open: openCreateGroupModal, close: closeCreateGroupModal },
+  ] = useDisclosure(false);
+  const [newGroupName, setNewGroupName] = useState("");
   const [createGroupError, setCreateGroupError] = useState<string | null>(null);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
@@ -42,7 +69,7 @@ export default function Dashboard() {
         setSelectedGroupId(null);
       }
     } catch (error) {
-      console.error('Error fetching user groups:', error);
+      console.error("Error fetching user groups:", error);
       setHasNoGroups(true);
       setSelectedGroupId(null);
     } finally {
@@ -66,25 +93,143 @@ export default function Dashboard() {
       setIsLoading(true);
       try {
         const currentDate = new Date();
-        const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).toISOString();
-        const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).toISOString();
-        
-        const [budgetData, transactionsData] = await Promise.all([
-          mockApi.budgets.getByGroup(selectedGroupId),
-          mockApi.transactions.getByGroup(selectedGroupId, startDate, endDate)
-        ]);
-        
-        setBudget(budgetData);
+        const currentMonth = currentDate.getMonth();
+        const currentYear = currentDate.getFullYear();
+
+        // 1. Fetch all budgets for the selected group
+        const groupBudgets = await budgetApi.getGroupBudgets(selectedGroupId);
+
+        let currentMonthBudget: Budget | null = null;
+
+        // 2. Find the budget for the current month
+        for (const b of groupBudgets) {
+          const budgetStartDate = new Date(b.dataInicio);
+          if (
+            budgetStartDate.getMonth() === currentMonth &&
+            budgetStartDate.getFullYear() === currentYear
+          ) {
+            currentMonthBudget = b;
+            break;
+          }
+        }
+
+        let fetchedBudget: Budget | null = null;
+        if (currentMonthBudget) {
+          // 3. If a budget for the current month exists, fetch its detailed planned items
+          // and enrich the budget object with them
+          const plannedItems: PlannedBudgetItem[] =
+            await plannedBudgetItemApi.getPlannedBudgetItemsForBudget(
+              currentMonthBudget._id
+            );
+
+          // Transform flat plannedItems into categorized structure for UI
+          const transformedCategories: BudgetCategory[] = [
+            { tipo: "renda", lancamentosPlanejados: [] },
+            { tipo: "despesa", lancamentosPlanejados: [] },
+            { tipo: "conta", lancamentosPlanejados: [] },
+            { tipo: "poupanca", lancamentosPlanejados: [] },
+          ];
+
+          plannedItems.forEach((item) => {
+            const category = transformedCategories.find(
+              (cat) => cat.tipo === item.categoryType
+            );
+            if (category) {
+              category.lancamentosPlanejados.push(item);
+            }
+          });
+
+          // Calculate aggregated planned totals
+          const totalRendaPlanejado =
+            transformedCategories
+              .find((c) => c.tipo === "renda")
+              ?.lancamentosPlanejados.reduce(
+                (sum, item) => sum + item.valorPlanejado,
+                0
+              ) || 0;
+          const totalDespesaPlanejado =
+            transformedCategories
+              .find((c) => c.tipo === "despesa")
+              ?.lancamentosPlanejados.reduce(
+                (sum, item) => sum + item.valorPlanejado,
+                0
+              ) || 0;
+          const totalContaPlanejado =
+            transformedCategories
+              .find((c) => c.tipo === "conta")
+              ?.lancamentosPlanejados.reduce(
+                (sum, item) => sum + item.valorPlanejado,
+                0
+              ) || 0;
+          const totalPoupancaPlanejado =
+            transformedCategories
+              .find((c) => c.tipo === "poupanca")
+              ?.lancamentosPlanejados.reduce(
+                (sum, item) => sum + item.valorPlanejado,
+                0
+              ) || 0;
+
+          fetchedBudget = {
+            ...currentMonthBudget,
+            categorias: transformedCategories, // Add the categories array
+            totalRendaPlanejado,
+            totalDespesaPlanejado,
+            totalContaPlanejado,
+            totalPoupancaPlanejado,
+          };
+        } else {
+          // If no budget for the current month, set a default empty budget or handle
+          console.warn(
+            `No budget found for current month (${
+              currentMonth + 1
+            }/${currentYear}) in group ${selectedGroupId}`
+          );
+          // Create an empty budget structure to avoid errors
+          fetchedBudget = {
+            _id: "", // Placeholder
+            grupoId: selectedGroupId,
+            dataInicio: new Date(currentYear, currentMonth, 1).toISOString(),
+            dataFim: new Date(currentYear, currentMonth + 1, 0).toISOString(),
+            criadoPor: "", // Placeholder
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            categorias: [
+              { tipo: "renda", lancamentosPlanejados: [] },
+              { tipo: "despesa", lancamentosPlanejados: [] },
+              { tipo: "conta", lancamentosPlanejados: [] },
+              { tipo: "poupanca", lancamentosPlanejados: [] },
+            ],
+            totalRendaPlanejado: 0,
+            totalDespesaPlanejado: 0,
+            totalContaPlanejado: 0,
+            totalPoupancaPlanejado: 0,
+          };
+        }
+
+        // 4. Fetch transactions (this part can remain similar, using mock for now)
+        const startDate = new Date(currentYear, currentMonth, 1).toISOString();
+        const endDate = new Date(
+          currentYear,
+          currentMonth + 1,
+          0
+        ).toISOString();
+        const transactionsData = await mockApi.transactions.getByGroup(
+          selectedGroupId,
+          startDate,
+          endDate
+        );
+
+        setBudget(fetchedBudget); // Set the enriched budget
         setTransactions(transactionsData);
       } catch (error) {
-        console.error('Error fetching dashboard data:', error);
+        console.error("Error fetching dashboard data:", error);
         setBudget(null);
         setTransactions([]);
       } finally {
         setIsLoading(false);
       }
     };
-    
+
     fetchData();
   }, [selectedGroupId]);
 
@@ -94,14 +239,14 @@ export default function Dashboard() {
     try {
       await groupApi.createGroup(newGroupName);
       closeCreateGroupModal();
-      setNewGroupName('');
+      setNewGroupName("");
       await fetchUserGroups(); // Re-fetch groups to update the selector
     } catch (error: any) {
-      console.error('Error creating group:', error);
+      console.error("Error creating group:", error);
       if (error.response && error.response.data && error.response.data.error) {
         setCreateGroupError(error.response.data.error);
       } else {
-        setCreateGroupError('Erro ao criar grupo. Tente novamente.');
+        setCreateGroupError("Erro ao criar grupo. Tente novamente.");
       }
     } finally {
       setIsCreatingGroup(false);
@@ -137,14 +282,20 @@ export default function Dashboard() {
           title="Nenhum Grupo Orçamentário Encontrado"
           icon={<IconInfoCircle />}
         >
-          Você não está vinculado a nenhum grupo orçamentário. Para começar a gerenciar suas finanças,
-          crie um novo grupo ou peça para ser convidado para um grupo existente.
+          Você não está vinculado a nenhum grupo orçamentário. Para começar a
+          gerenciar suas finanças, crie um novo grupo ou peça para ser convidado
+          para um grupo existente.
           <Button mt="md" onClick={openCreateGroupModal}>
             Criar Novo Grupo
           </Button>
         </Alert>
 
-        <Modal opened={createGroupModalOpened} onClose={closeCreateGroupModal} title="Criar Novo Grupo Orçamentário" centered>
+        <Modal
+          opened={createGroupModalOpened}
+          onClose={closeCreateGroupModal}
+          title="Criar Novo Grupo Orçamentário"
+          centered
+        >
           <Stack>
             <TextInput
               label="Nome de Grupo Orçamentário"
@@ -157,7 +308,11 @@ export default function Dashboard() {
               error={createGroupError}
               required
             />
-            <Button onClick={handleCreateGroup} loading={isCreatingGroup} disabled={!newGroupName.trim()}>
+            <Button
+              onClick={handleCreateGroup}
+              loading={isCreatingGroup}
+              disabled={!newGroupName.trim()}
+            >
               Criar Grupo
             </Button>
           </Stack>
@@ -175,11 +330,11 @@ export default function Dashboard() {
     >
       <Group justify="space-between" mb="xl">
         <GroupSelector
-          value={selectedGroupId || ''}
+          value={selectedGroupId || ""}
           onChange={setSelectedGroupId}
           groups={userGroups}
         />
-        
+
         <Group>
           <Button
             variant="light"
@@ -188,21 +343,21 @@ export default function Dashboard() {
               if (selectedGroupId) {
                 setIsLoading(true);
                 setTimeout(() => {
-                  setSelectedGroupId(selectedGroupId); 
+                  setSelectedGroupId(selectedGroupId);
                 }, 800);
               }
             }}
           >
             Atualizar
           </Button>
-          
+
           <Menu shadow="md" width={200} position="bottom-end">
             <Menu.Target>
               <ActionIcon variant="light" size="lg" radius="md">
                 <IconDotsVertical size={16} />
               </ActionIcon>
             </Menu.Target>
-            
+
             <Menu.Dropdown>
               <Menu.Item leftSection={<IconDownload size={14} />}>
                 Exportar dados
@@ -211,7 +366,7 @@ export default function Dashboard() {
           </Menu>
         </Group>
       </Group>
-      
+
       <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md" mb="xl">
         <BudgetSummaryCard
           title="Receitas"
@@ -242,11 +397,13 @@ export default function Dashboard() {
           isLoading={isLoading}
         />
       </SimpleGrid>
-      
+
       <Grid gutter="md">
         <Grid.Col span={{ base: 12, md: 8 }}>
           <Paper p="md" radius="md" withBorder>
-            <Text fw={500} mb="md">Orçado vs Realizado</Text>
+            <Text fw={500} mb="md">
+              Orçado vs Realizado
+            </Text>
             <BudgetVsActualChart
               budget={budget}
               transactions={transactions}
@@ -254,22 +411,29 @@ export default function Dashboard() {
             />
           </Paper>
         </Grid.Col>
-        
+
         <Grid.Col span={{ base: 12, md: 4 }}>
           <Paper p="md" radius="md" withBorder>
-            <Text fw={500} mb="md">Distribuição de Gastos</Text>
+            <Text fw={500} mb="md">
+              Distribuição de Gastos
+            </Text>
             <CategoryDistributionChart
               transactions={transactions}
               isLoading={isLoading}
             />
           </Paper>
         </Grid.Col>
-        
+
         <Grid.Col span={12}>
           <Paper p="md" radius="md" withBorder>
             <Group justify="space-between" mb="md">
               <Text fw={500}>Transações Recentes</Text>
-              <Button variant="subtle" size="xs" component="a" href="/lancamentos">
+              <Button
+                variant="subtle"
+                size="xs"
+                component="a"
+                href="/lancamentos"
+              >
                 Ver todas
               </Button>
             </Group>

@@ -2,12 +2,17 @@ export interface PlannedBudgetItem {
   _id: string;
   budgetId: string;
   groupId: string;
-  categoryType: 'renda' | 'despesa' | 'conta' | 'poupanca';
+  categoryType: "renda" | "despesa" | "conta" | "poupanca";
   nome: string;
   valorPlanejado: number;
-  criadoPor?: string; // Optional, as it might be populated or not needed on client
-  createdAt?: string;
-  updatedAt?: string;
+  criadoPor: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BudgetCategory {
+  tipo: "renda" | "despesa" | "conta" | "poupanca";
+  lancamentosPlanejados: PlannedBudgetItem[];
 }
 
 export interface Budget {
@@ -15,7 +20,14 @@ export interface Budget {
   grupoId: string;
   dataInicio: string;
   dataFim: string;
-  criadoPor?: string; // Optional, as it might be populated or not needed on client
-  createdAt?: string;
-  updatedAt?: string;
+  criadoPor: string;
+  createdAt: string;
+  updatedAt: string;
+  // New fields for aggregated planned totals
+  totalRendaPlanejado?: number;
+  totalDespesaPlanejado?: number;
+  totalContaPlanejado?: number;
+  totalPoupancaPlanejado?: number;
+  // CRITICAL: Add the categories array
+  categorias: BudgetCategory[];
 }

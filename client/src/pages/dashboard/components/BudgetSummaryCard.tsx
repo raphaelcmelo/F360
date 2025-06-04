@@ -1,20 +1,12 @@
-import {
-  Paper,
-  Text,
-  Skeleton,
-  Group,
-  RingProgress,
-  Stack,
-  Box,
-} from "@mantine/core";
-import { motion } from "framer-motion";
-import { Budget } from "../../../types/budget";
+import { Card, Text, Group, Skeleton } from "@mantine/core";
 import { Transaction } from "../../../types/transaction";
+import { Budget } from "../../../types/budget"; // Import Budget type
+import { formatCurrency } from "../../../utils/format";
 
 interface BudgetSummaryCardProps {
   title: string;
   type: "renda" | "despesa" | "conta" | "poupanca";
-  budget: Budget | null;
+  budget: Budget | null; // Now includes planned totals
   transactions: Transaction[];
   isLoading: boolean;
 }
@@ -26,98 +18,73 @@ export default function BudgetSummaryCard({
   transactions,
   isLoading,
 }: BudgetSummaryCardProps) {
-  // Calculate planned total for the category
-  const plannedTotal =
-    budget?.categorias
-      .find((cat) => cat.tipo === type)
-      ?.lancamentosPlanejados.reduce(
-        (sum, item) => sum + item.valorPlanejado,
-        0
-      ) || 0;
-
-  // Calculate actual total for the category
-  const actualTotal = transactions
+  const totalActual = transactions
     .filter((t) => t.categoria === type)
     .reduce((sum, t) => sum + t.valor, 0);
 
-  // Calculate percentage
-  const percentage =
-    plannedTotal > 0
-      ? Math.min(Math.round((actualTotal / plannedTotal) * 100), 100)
-      : 0;
+  // Dynamically access the correct planned total from the budget object
+  const totalPlanned = budget
+    ? budget[`total${type.charAt(0).toUpperCase() + type.slice(1)}Planejado`] ||
+      0
+    : 0;
 
-  // Get color based on type and percentage
-  const getColor = () => {
-    if (type === "renda") {
-      return percentage >= 100 ? "green" : "blue";
-    }
-    if (type === "poupanca") {
-      return percentage >= 100 ? "teal" : "blue";
-    }
-    return percentage > 100 ? "red" : percentage > 80 ? "yellow" : "teal";
-  };
+  const isOverBudget =
+    type === "despesa" || type === "conta" ? totalActual > totalPlanned : false;
+  const isUnderBudget =
+    type === "renda" || type === "poupanca"
+      ? totalActual < totalPlanned
+      : false;
+
+  const valueColor =
+    type === "renda" || type === "poupanca"
+      ? isUnderBudget
+        ? "red"
+        : "green"
+      : isOverBudget
+      ? "red"
+      : "green";
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-    >
-      <Paper p="md" radius="md" withBorder>
-        <Text size="sm" fw={500} mb="xs">
+    <Card withBorder radius="md" p="md">
+      <Group justify="space-between" mb="xs">
+        <Text size="sm" c="dimmed">
           {title}
         </Text>
+        {/* You can add an icon here if desired */}
+      </Group>
 
+      <Group align="flex-end" gap="xs" mb="xs">
         {isLoading ? (
-          <Stack>
-            <Skeleton height={28} width="70%" />
-            <Skeleton height={90} circle />
-          </Stack>
+          <Skeleton height={28} width="70%" />
         ) : (
-          <>
-            <Group justify="space-between" align="center" mb="sm" wrap="nowrap">
-              <Stack spacing={2}>
-                <Text size="xl" fw={700}>
-                  R${" "}
-                  {actualTotal.toLocaleString("pt-BR", {
-                    minimumFractionDigits: 2,
-                  })}
-                </Text>
-                <Text size="xs" c="dimmed">
-                  de R${" "}
-                  {plannedTotal.toLocaleString("pt-BR", {
-                    minimumFractionDigits: 2,
-                  })}
-                </Text>
-              </Stack>
-
-              <RingProgress
-                size={90}
-                thickness={8}
-                roundCaps
-                sections={[{ value: percentage, color: getColor() }]}
-                label={
-                  <Box
-                    style={{
-                      position: "absolute",
-                      top: "50%",
-                      left: "50%",
-                      transform: "translate(-50%, -50%)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Text fw={700} size="lg">
-                      {percentage}%
-                    </Text>
-                  </Box>
-                }
-              />
-            </Group>
-          </>
+          <Text size="xl" fw={700} style={{ lineHeight: 1 }}>
+            {formatCurrency(totalActual)}
+          </Text>
         )}
-      </Paper>
-    </motion.div>
+        {isLoading ? (
+          <Skeleton height={18} width="30%" />
+        ) : (
+          <Text size="sm" c="dimmed" style={{ lineHeight: 1 }}>
+            de {formatCurrency(totalPlanned)}
+          </Text>
+        )}
+      </Group>
+
+      {isLoading ? (
+        <Skeleton height={16} width="50%" />
+      ) : (
+        <Text size="xs" c={valueColor}>
+          {type === "renda" || type === "poupanca"
+            ? totalActual >= totalPlanned
+              ? "Meta atingida!"
+              : `Faltam ${formatCurrency(totalPlanned - totalActual)}`
+            : totalActual <= totalPlanned
+            ? "Dentro do orçamento"
+            : `Acima do orçamento em ${formatCurrency(
+                totalActual - totalPlanned
+              )}`}
+        </Text>
+      )}
+    </Card>
   );
 }
