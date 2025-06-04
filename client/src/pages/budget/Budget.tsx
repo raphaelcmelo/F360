@@ -25,13 +25,9 @@ import {
 import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { mockApi } from "../../services/api";
+import { budgetApi, plannedBudgetItemApi } from "../../services/api"; // Import real APIs
 import GroupSelector from "../../components/ui/GroupSelector";
-import {
-  Budget as BudgetType,
-  BudgetCategory,
-  PlannedItem,
-} from "../../types/budget";
+import { Budget as BudgetType, PlannedBudgetItem } from "../../types/budget"; // Use PlannedBudgetItem from types
 import { useAuth } from "../../contexts/AuthContext";
 import { Group as BudgetGroupType } from "../../types/group";
 import CurrencyInput from "../../components/ui/CurrencyInput";
@@ -49,11 +45,25 @@ const newEntrySchema = z.object({
 
 type NewEntryFormValues = z.infer<typeof newEntrySchema>;
 
+// Define a type for the transformed budget data for the UI
+interface UIBudgetCategory {
+  tipo: "renda" | "despesa" | "conta" | "poupanca";
+  lancamentosPlanejados: { nome: string; valorPlanejado: number }[];
+}
+
+interface UIBudget {
+  _id: string;
+  grupoId: string;
+  dataInicio: string;
+  dataFim: string;
+  categorias: UIBudgetCategory[];
+}
+
 export default function Budget() {
   const { user, isLoading: isAuthLoading } = useAuth();
   const [groups, setGroups] = useState<BudgetGroupType[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
-  const [budget, setBudget] = useState<BudgetType | null>(null);
+  const [budget, setBudget] = useState<UIBudget | null>(null); // Use UIBudget type
   const [isBudgetLoading, setIsBudgetLoading] = useState(false);
   const [modalOpened, { open: openModal, close: closeModal }] =
     useDisclosure(false);
@@ -75,9 +85,8 @@ export default function Budget() {
   // Effect to set groups and initial selectedGroupId when user data is available
   useEffect(() => {
     if (!isAuthLoading && user?.grupos) {
-      // Map user.grupos to BudgetGroupType, assuming groupId is _id and displayName is nome
       const mappedGroups: BudgetGroupType[] = user.grupos.map((g) => ({
-        _id: g._id, // Changed from g.groupId to g._id
+        _id: g._id,
         nome: g.displayName,
         displayName: g.displayName,
         membros: [],
@@ -87,17 +96,11 @@ export default function Budget() {
       }));
       setGroups(mappedGroups);
       if (mappedGroups.length > 0) {
-        // Set initial selectedGroupId if it's not set or if the current one is no longer valid
-        // Removed selectedGroupId from dependency array to prevent re-triggering on its own changes
         const currentIdIsValid = mappedGroups.some(
           (g) => g._id === selectedGroupId
         );
         if (!selectedGroupId || !currentIdIsValid) {
-          console.log(
-            "Setting initial selectedGroupId to:",
-            mappedGroups[0]._id
-          ); // Added log
-          setSelectedGroupId(mappedGroups[0]._id); // FIX: Set _id as string
+          setSelectedGroupId(mappedGroups[0]._id);
         }
       } else {
         setSelectedGroupId("");
@@ -106,10 +109,10 @@ export default function Budget() {
       setGroups([]);
       setSelectedGroupId("");
     }
-  }, [user, isAuthLoading]); // Removed selectedGroupId from dependencies
+  }, [user, isAuthLoading]);
 
   const fetchBudget = useCallback(async () => {
-    if (!selectedGroupId) {
+    if (!selectedGroupId || !user?._id) {
       setBudget(null);
       setIsBudgetLoading(false);
       return;
@@ -117,21 +120,80 @@ export default function Budget() {
 
     setIsBudgetLoading(true);
     try {
-      const budgetData = await mockApi.budgets.getByGroup(selectedGroupId);
-      setBudget({
-        ...budgetData,
-        categorias: budgetData.categorias.map((cat: any) => ({
-          ...cat,
-          tipo: cat.tipo as BudgetCategory["tipo"],
-        })),
+      const currentDate = new Date();
+      const currentYear = currentDate.getFullYear();
+      const currentMonth = currentDate.getMonth(); // 0-indexed
+
+      // Get start and end of the current month
+      const startDate = new Date(currentYear, currentMonth, 1);
+      const endDate = new Date(currentYear, currentMonth + 1, 0); // Last day of current month
+
+      let currentBudget: BudgetType | null = null;
+
+      // 1. Try to find an existing budget for the current month
+      const groupBudgets = await budgetApi.getGroupBudgets(selectedGroupId);
+      currentBudget =
+        groupBudgets.find(
+          (b) =>
+            new Date(b.dataInicio).getMonth() === currentMonth &&
+            new Date(b.dataInicio).getFullYear() === currentYear
+        ) || null;
+
+      // 2. If no budget exists for the current month, create one
+      if (!currentBudget) {
+        console.log("No budget found for current month, creating new one...");
+        currentBudget = await budgetApi.createBudget(
+          selectedGroupId,
+          startDate.toISOString(),
+          endDate.toISOString()
+        );
+      }
+
+      if (!currentBudget) {
+        setBudget(null);
+        return;
+      }
+
+      // 3. Fetch planned items for the identified/created budget
+      const plannedItems: PlannedBudgetItem[] =
+        await plannedBudgetItemApi.getPlannedBudgetItemsForBudget(
+          currentBudget._id
+        );
+
+      // 4. Transform flat plannedItems into categorized structure for UI
+      const transformedBudget: UIBudget = {
+        _id: currentBudget._id,
+        grupoId: currentBudget.grupoId,
+        dataInicio: currentBudget.dataInicio,
+        dataFim: currentBudget.dataFim,
+        categorias: [
+          { tipo: "renda", lancamentosPlanejados: [] },
+          { tipo: "despesa", lancamentosPlanejados: [] },
+          { tipo: "conta", lancamentosPlanejados: [] },
+          { tipo: "poupanca", lancamentosPlanejados: [] },
+        ],
+      };
+
+      plannedItems.forEach((item) => {
+        const category = transformedBudget.categorias.find(
+          (cat) => cat.tipo === item.categoryType
+        );
+        if (category) {
+          category.lancamentosPlanejados.push({
+            nome: item.nome,
+            valorPlanejado: item.valorPlanejado,
+          });
+        }
       });
+
+      setBudget(transformedBudget);
     } catch (error) {
-      console.error("Error fetching budget:", error);
+      console.error("Error fetching or creating budget:", error);
       setBudget(null); // Set budget to null on error to display empty state
     } finally {
       setIsBudgetLoading(false);
     }
-  }, [selectedGroupId]);
+  }, [selectedGroupId, user?._id]);
 
   useEffect(() => {
     if (selectedGroupId && !isAuthLoading) {
@@ -142,48 +204,72 @@ export default function Budget() {
     }
   }, [fetchBudget, selectedGroupId, isAuthLoading]);
 
-  const handleAddPlannedItem = (data: NewEntryFormValues) => {
-    if (!budget) return;
+  const handleAddPlannedItem = async (data: NewEntryFormValues) => {
+    if (!budget || !user?._id) return;
 
-    const newPlannedItem: PlannedItem = {
-      nome: data.nome,
-      valorPlanejado: data.valorPlanejado,
-    };
+    try {
+      const newPlannedItem = await plannedBudgetItemApi.createPlannedBudgetItem(
+        budget._id,
+        budget.grupoId,
+        data.categoryType,
+        data.nome,
+        data.valorPlanejado
+      );
 
-    setBudget((prevBudget) => {
-      if (!prevBudget) return null;
+      // Optimistically update UI or refetch
+      setBudget((prevBudget) => {
+        if (!prevBudget) return null;
 
-      const updatedCategories = prevBudget.categorias.map((category) => {
-        if (category.tipo === data.categoryType) {
-          return {
-            ...category,
+        const updatedCategories = prevBudget.categorias.map((category) => {
+          if (category.tipo === newPlannedItem.categoryType) {
+            return {
+              ...category,
+              lancamentosPlanejados: [
+                ...category.lancamentosPlanejados,
+                {
+                  nome: newPlannedItem.nome,
+                  valorPlanejado: newPlannedItem.valorPlanejado,
+                },
+              ],
+            };
+          }
+          return category;
+        });
+
+        // If the category didn't exist before (shouldn't happen with pre-defined categories)
+        if (
+          !updatedCategories.some(
+            (cat) => cat.tipo === newPlannedItem.categoryType
+          )
+        ) {
+          updatedCategories.push({
+            tipo: newPlannedItem.categoryType,
             lancamentosPlanejados: [
-              ...category.lancamentosPlanejados,
-              newPlannedItem,
+              {
+                nome: newPlannedItem.nome,
+                valorPlanejado: newPlannedItem.valorPlanejado,
+              },
             ],
-          };
+          });
         }
-        return category;
+
+        return {
+          ...prevBudget,
+          categorias: updatedCategories,
+        };
       });
 
-      if (!updatedCategories.some((cat) => cat.tipo === data.categoryType)) {
-        updatedCategories.push({
-          tipo: data.categoryType,
-          lancamentosPlanejados: [newPlannedItem],
-        } as BudgetCategory);
-      }
-
-      return {
-        ...prevBudget,
-        categorias: updatedCategories,
-      };
-    });
-
-    closeModal();
-    reset();
+      closeModal();
+      reset();
+    } catch (error) {
+      console.error("Error adding planned item:", error);
+      // Handle error, maybe show a notification
+    }
   };
 
-  const getCategoryItems = (type: BudgetCategory["tipo"]) => {
+  const getCategoryItems = (
+    type: UIBudgetCategory["tipo"]
+  ): UIBudgetCategory["lancamentosPlanejados"] => {
     return (
       budget?.categorias.find((cat) => cat.tipo === type)
         ?.lancamentosPlanejados || []
@@ -197,20 +283,12 @@ export default function Budget() {
     }).format(value);
   };
 
-  const totalPlanned = (type: BudgetCategory["tipo"]) => {
+  const totalPlanned = (type: UIBudgetCategory["tipo"]) => {
     return getCategoryItems(type).reduce(
       (sum, item) => sum + item.valorPlanejado,
       0
     );
   };
-
-  // --- Debugging Logs ---
-  console.log("Budget Component Render - isAuthLoading:", isAuthLoading);
-  console.log("Budget Component Render - user:", user);
-  console.log("Budget Component Render - user.grupos:", user?.grupos);
-  console.log("Budget Component Render - groups state:", groups);
-  console.log("Budget Component Render - selectedGroupId:", selectedGroupId);
-  // --- End Debugging Logs ---
 
   if (isAuthLoading) {
     return (
@@ -272,6 +350,7 @@ export default function Budget() {
               reset();
               openModal();
             }}
+            disabled={!selectedGroupId || isBudgetLoading} // Enable if a group is selected and not loading
           >
             Nova entrada
           </Button>
@@ -302,6 +381,7 @@ export default function Budget() {
           };
 
           const color = typeColorMap[type] || "gray";
+          const items = getCategoryItems(type as UIBudgetCategory["tipo"]);
 
           return (
             <Grid.Col span={{ base: 12, md: 6, lg: 3 }} key={type}>
@@ -325,30 +405,27 @@ export default function Budget() {
                   {" "}
                   {isBudgetLoading ? (
                     <Text c="dimmed">Carregando...</Text>
-                  ) : getCategoryItems(type as BudgetCategory["tipo"]).length >
-                    0 ? (
+                  ) : items.length > 0 ? (
                     <Stack gap="xs">
-                      {getCategoryItems(type as BudgetCategory["tipo"]).map(
-                        (item, index) => (
-                          <Group
-                            key={index}
-                            justify="space-between"
-                            wrap="nowrap"
+                      {items.map((item, index) => (
+                        <Group
+                          key={index} // Consider using a unique ID if items had one
+                          justify="space-between"
+                          wrap="nowrap"
+                        >
+                          <Text size="sm" className="truncate">
+                            {item.nome}
+                          </Text>
+                          <Text
+                            size="sm"
+                            fw={500}
+                            c={color}
+                            style={{ flexShrink: 0 }}
                           >
-                            <Text size="sm" className="truncate">
-                              {item.nome}
-                            </Text>
-                            <Text
-                              size="sm"
-                              fw={500}
-                              c={color}
-                              style={{ flexShrink: 0 }}
-                            >
-                              {formatCurrency(item.valorPlanejado)}
-                            </Text>
-                          </Group>
-                        )
-                      )}
+                            {formatCurrency(item.valorPlanejado)}
+                          </Text>
+                        </Group>
+                      ))}
                     </Stack>
                   ) : (
                     <Text c="dimmed">Nenhuma entrada planejada.</Text>
@@ -361,7 +438,7 @@ export default function Budget() {
                   </Text>
                   <Text size="md" fw={700} c={color}>
                     {formatCurrency(
-                      totalPlanned(type as BudgetCategory["tipo"])
+                      totalPlanned(type as UIBudgetCategory["tipo"])
                     )}
                   </Text>
                 </Group>

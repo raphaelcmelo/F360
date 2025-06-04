@@ -13,6 +13,8 @@ import {
   inviteMemberToGroup,
 } from "../controllers/groupController"; // Import group controllers
 import { protect } from "../middleware/authMiddleware";
+import budgetRoutes from "./budgetRoutes"; // Import budget routes
+import budgetItemRoutes from "./budgetItemRoutes"; // Import budget item routes
 
 const router = Router();
 
@@ -28,5 +30,9 @@ router.get("/auth/profile", protect, getProfile);
 router.post("/groups", protect, createGroup);
 router.get("/groups", protect, getUserGroups);
 router.post("/groups/:groupId/invite", protect, inviteMemberToGroup);
+
+// Budget routes
+router.use("/budgets", budgetRoutes);
+router.use("/budget-items", budgetItemRoutes);
 
 export default router;

@@ -8,6 +8,7 @@ import connectDB from "./config/database";
 // Import routes
 import authRoutes from "./routes/auth";
 import userRoutes from "./routes/users";
+import budgetRoutes from "./routes/budgetRoutes"; // Import budget routes
 import groupRoutes from "./routes/groupRoutes"; // Import group routes
 
 const app = express();
@@ -39,7 +40,8 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
-app.use("/api/groups", groupRoutes); // Use group routes
+app.use("/api/groups", groupRoutes);
+app.use("/api/budgets", budgetRoutes);
 
 // Health check
 app.get("/api/health", (req, res) => {

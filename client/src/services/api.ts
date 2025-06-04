@@ -1,6 +1,7 @@
 import axios from "axios";
 import { Group, User } from "../types/user"; // Import updated Group and User types
 import { Group as GroupType } from "../types/group"; // Import GroupType from group.ts
+import { Budget, PlannedBudgetItem } from "../types/budget";
 
 // Create an axios instance
 export const api = axios.create({
@@ -135,73 +136,72 @@ export const groupApi = {
   },
 };
 
+export const budgetApi = {
+  createBudget: async (
+    grupoId: string,
+    dataInicio: string,
+    dataFim: string
+  ): Promise<Budget> => {
+    const response = await api.post("/budgets", {
+      grupoId,
+      dataInicio,
+      dataFim,
+    });
+    return response.data.data;
+  },
+  getGroupBudgets: async (groupId: string): Promise<Budget[]> => {
+    const response = await api.get(`/budgets/group/${groupId}`);
+    return response.data.data;
+  },
+  getBudgetById: async (budgetId: string): Promise<Budget> => {
+    const response = await api.get(`/budgets/${budgetId}`);
+    return response.data.data;
+  },
+  deleteBudget: async (budgetId: string) => {
+    const response = await api.delete(`/budgets/${budgetId}`);
+    return response.data;
+  },
+};
+
+export const plannedBudgetItemApi = {
+  createPlannedBudgetItem: async (
+    budgetId: string,
+    groupId: string,
+    categoryType: "renda" | "despesa" | "conta" | "poupanca",
+    nome: string,
+    valorPlanejado: number
+  ): Promise<PlannedBudgetItem> => {
+    const response = await api.post("/budget-items", {
+      budgetId,
+      groupId,
+      categoryType,
+      nome,
+      valorPlanejado,
+    });
+    return response.data.data;
+  },
+  getPlannedBudgetItemsForBudget: async (
+    budgetId: string
+  ): Promise<PlannedBudgetItem[]> => {
+    const response = await api.get(`/budget-items/budget/${budgetId}`);
+    return response.data.data;
+  },
+  updatePlannedBudgetItem: async (
+    itemId: string,
+    updates: Partial<PlannedBudgetItem>
+  ): Promise<PlannedBudgetItem> => {
+    const response = await api.put(`/budget-items/${itemId}`, updates);
+    return response.data.data;
+  },
+  deletePlannedBudgetItem: async (itemId: string) => {
+    const response = await api.delete(`/budget-items/${itemId}`);
+    return response.data;
+  },
+};
+
 // For demonstration purposes, let's keep mock data for other parts if needed
 // In a real app, these would make actual API calls
 export const mockApi = {
-  // Groups APIs (these will be replaced by real groupApi calls)
-  // Removed mockApi.groups as it's no longer needed for Groups.tsx
-  // Keeping other mock APIs for now if they are used elsewhere
-  // Budgets APIs
-  budgets: {
-    getByGroup: async (groupId: string) => {
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 800));
-
-      // Get current month for mock data
-      const currentDate = new Date();
-      const startDate = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth(),
-        1
-      );
-      const endDate = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth() + 1,
-        0
-      );
-
-      // Mock response
-      return {
-        _id: "budget1",
-        grupoId: groupId,
-        dataInicio: startDate.toISOString(),
-        dataFim: endDate.toISOString(),
-        categorias: [
-          {
-            tipo: "renda",
-            lancamentosPlanejados: [
-              { nome: "Salário", valorPlanejado: 5000 },
-              { nome: "Freelance", valorPlanejado: 1200 },
-            ],
-          },
-          {
-            tipo: "despesa",
-            lancamentosPlanejados: [
-              { nome: "Aluguel", valorPlanejado: 1500 },
-              { nome: "Supermercado", valorPlanejado: 800 },
-              { nome: "Transporte", valorPlanejado: 400 },
-            ],
-          },
-          {
-            tipo: "conta",
-            lancamentosPlanejados: [
-              { nome: "Energia", valorPlanejado: 150 },
-              { nome: "Internet", valorPlanejado: 120 },
-              { nome: "Água", valorPlanejado: 80 },
-            ],
-          },
-          {
-            tipo: "poupanca",
-            lancamentosPlanejados: [
-              { nome: "Reserva de emergência", valorPlanejado: 500 },
-              { nome: "Férias", valorPlanejado: 300 },
-            ],
-          },
-        ],
-      };
-    },
-  },
-
   // Transactions APIs
   transactions: {
     getByGroup: async (groupId: string, startDate: string, endDate: string) => {

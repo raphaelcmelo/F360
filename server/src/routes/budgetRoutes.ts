@@ -11,6 +11,9 @@ const router = Router();
 
 router.route("/").post(authenticateToken, createBudget);
 router.route("/group/:groupId").get(authenticateToken, getGroupBudgets);
-router.route("/:budgetId").get(authenticateToken, getBudgetById).delete(authenticateToken, deleteBudget);
+router
+  .route("/:budgetId")
+  .get(authenticateToken, getBudgetById)
+  .delete(authenticateToken, deleteBudget);
 
 export default router;
