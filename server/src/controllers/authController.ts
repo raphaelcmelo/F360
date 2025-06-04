@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import User from "../models/User";
 import Group from "../models/Group"; // Import the new Group model
+import Token from "../models/Token"; // Import the new Token model
 import {
   LoginSchema,
   CreateUserSchema,
@@ -141,10 +142,6 @@ export const getProfile = async (
   res: Response<ApiResponse>
 ): Promise<void> => {
   try {
-    // Ensure the user object in req.user has populated groups if needed
-    // If req.user is set by a middleware, that middleware should populate 'grupos'
-    // For now, assuming req.user is already populated or we don't need groups here.
-    // If not populated, you might need to fetch it again:
     const user = await User.findById(req.user?._id).populate("grupos.groupId");
     if (!user) {
       res.status(404).json({ success: false, error: "User not found" });
@@ -170,11 +167,8 @@ export const forgotPassword = async (
     const validatedData = ForgotPasswordSchema.parse(req.body);
     const { email } = validatedData;
 
-    // User.findOne will not return fields with select: false unless explicitly stated
-    // However, for forgot password, we don't need to check existing token/expiry yet.
     const user = await User.findOne({ email });
 
-    // Important: Always send a generic success message to prevent user enumeration
     if (!user || !user.isActive) {
       res.status(200).json({
         success: true, // Perceived success
@@ -188,15 +182,21 @@ export const forgotPassword = async (
     const resetToken = crypto.randomBytes(32).toString("hex");
 
     // Hash the token before storing it in the database
-    user.passwordResetToken = crypto
+    const hashedToken = crypto
       .createHash("sha256")
       .update(resetToken)
       .digest("hex");
 
     // Set token expiry (e.g., 1 hour from now)
-    user.passwordResetExpires = new Date(Date.now() + 3600000); // 1 hour in ms
+    const expiresAt = new Date(Date.now() + 3600000); // 1 hour in ms
 
-    await user.save({ validateBeforeSave: false }); // Skip validation for these fields if not in main schema validation
+    // Create a new Token document
+    await Token.create({
+      userId: user._id,
+      token: hashedToken,
+      type: "passwordReset",
+      expiresAt,
+    });
 
     try {
       await sendPasswordResetEmail(user.email, resetToken);
@@ -207,17 +207,10 @@ export const forgotPassword = async (
       });
     } catch (emailError) {
       console.error("Failed to send password reset email:", emailError);
-      // Even if email fails, don't reveal user existence.
-      // Log the error for admin, but user still gets generic success.
-      // Critical: Reset token and expiry should be cleared if email fails to prevent unusable tokens.
-      user.passwordResetToken = undefined;
-      user.passwordResetExpires = undefined;
-      await user.save({ validateBeforeSave: false });
-
-      // Send generic message. For critical failures, an admin should be alerted.
+      // If email fails, consider deleting the token to prevent unusable tokens.
+      // For now, we'll just log and send a generic message.
       res.status(200).json({
-        // Or 500 if we want to indicate a server issue without revealing specifics
-        success: true, // Still perceived success to the client for security
+        success: true,
         message:
           "If an account with this email exists, a password reset link has been sent. If you don't receive it, please try again later or contact support.",
       });
@@ -232,10 +225,8 @@ export const forgotPassword = async (
       return;
     }
     console.error("Forgot Password Error:", error);
-    // Generic message for other errors too
     res.status(200).json({
-      // Or 500 but be careful not to leak info
-      success: true, // Perceived success
+      success: true,
       message:
         "If an account with this email exists, a password reset link has been sent.",
     });
@@ -252,14 +243,14 @@ export const resetPassword = async (
 
     const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
 
-    // Find user by hashed token and check expiry
-    // Need to explicitly select the passwordResetToken and passwordResetExpires fields
-    const user = await User.findOne({
-      passwordResetToken: hashedToken,
-      passwordResetExpires: { $gt: Date.now() },
-    }).select("+passwordResetToken +passwordResetExpires +password"); // Also select password to ensure pre-save hook works
+    // Find the token in the Token collection
+    const resetTokenDoc = await Token.findOne({
+      token: hashedToken,
+      type: "passwordReset",
+      expiresAt: { $gt: Date.now() }, // Check if token is not expired
+    });
 
-    if (!user) {
+    if (!resetTokenDoc) {
       res.status(400).json({
         success: false,
         error:
@@ -268,20 +259,27 @@ export const resetPassword = async (
       return;
     }
 
+    // Find the user associated with the token
+    const user = await User.findById(resetTokenDoc.userId).select("+password"); // Select password to ensure pre-save hook works
+
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        error: "User not found for this token.",
+      });
+      return;
+    }
+
     // Set new password (it will be hashed by the pre-save hook in User model)
     user.password = validatedData.password;
-    user.passwordResetToken = undefined; // Clear the token
-    user.passwordResetExpires = undefined; // Clear the expiry
+    await user.save();
 
-    await user.save(); // Validation (e.g. password length) will run here due to pre-save hook
-
-    // Optionally, log the user in by generating a new JWT token
-    // const jwtToken = generateToken(user._id);
+    // Invalidate the used token by deleting it from the Token collection
+    await Token.deleteOne({ _id: resetTokenDoc._id });
 
     res.status(200).json({
       success: true,
       message: "Password has been reset successfully.",
-      // data: { token: jwtToken } // If auto-login is desired
     });
   } catch (error: any) {
     if (error.name === "ZodError") {

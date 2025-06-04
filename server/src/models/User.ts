@@ -5,9 +5,7 @@ export interface IUser extends Document {
   name: string;
   email: string;
   password?: string;
-  isActive: boolean; // Added isActive field
-  passwordResetToken?: string;
-  passwordResetExpires?: Date;
+  isActive: boolean;
   grupos: { groupId: mongoose.Types.ObjectId; displayName: string }[];
   createdAt: Date;
   updatedAt: Date;
@@ -26,8 +24,6 @@ const userSchema = new Schema<IUser>(
     },
     password: { type: String, required: true, select: false }, // Password is required and not selected by default
     isActive: { type: Boolean, default: true }, // Default to true
-    passwordResetToken: String,
-    passwordResetExpires: Date,
     grupos: [
       {
         groupId: { type: Schema.Types.ObjectId, ref: "Group", required: true },
