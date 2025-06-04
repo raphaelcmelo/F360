@@ -2,7 +2,7 @@ import express, { Router } from "express";
 import {
   register,
   login,
-  getProfile,
+  getProfile, // Keep getProfile for the /me route
   forgotPassword,
   resetPassword,
   logout,
@@ -13,7 +13,9 @@ const router: Router = express.Router();
 
 router.post("/register", register);
 router.post("/login", login);
-router.get("/profile", authenticateToken, getProfile);
+
+// New /me route to get user profile using token
+router.get("/me", authenticateToken, getProfile);
 
 // Password recovery routes
 router.post("/forgot-password", forgotPassword);

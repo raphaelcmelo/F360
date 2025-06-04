@@ -111,10 +111,14 @@ export const login = async (
 
     const token = generateToken(user._id);
 
+    // Convert user document to a plain object and remove the password field
+    const userObject = user.toJSON();
+    delete userObject.password;
+
     res.json({
       success: true,
       data: {
-        user: user.toJSON(),
+        user: userObject, // Send the user object without the password
         token,
       },
       message: "Login successful",
@@ -149,7 +153,7 @@ export const getProfile = async (
     }
     res.json({
       success: true,
-      data: user.toJSON(), // Use toJSON to remove sensitive fields
+      data: user.toJSON(), // Use toJSON to remove sensitive fields (password is already excluded by schema select: false)
     });
   } catch (error: any) {
     console.error("Get Profile Error:", error);
