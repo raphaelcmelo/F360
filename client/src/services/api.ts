@@ -1,5 +1,6 @@
 import axios from "axios";
 import { Group, User } from "../types/user"; // Import updated Group and User types
+import { Group as GroupType } from "../types/group"; // Import GroupType from group.ts
 
 // Create an axios instance
 export const api = axios.create({
@@ -109,11 +110,11 @@ export const authApi = {
 
 // New API functions for Group management
 export const groupApi = {
-  createGroup: async (nome: string) => {
+  createGroup: async (nome: string): Promise<GroupType> => {
     const response = await api.post("/groups", { nome });
     return response.data.data;
   },
-  getUserGroups: async (): Promise<Group[]> => {
+  getUserGroups: async (): Promise<GroupType[]> => {
     const response = await api.get("/groups");
     return response.data.data;
   },
@@ -124,6 +125,10 @@ export const groupApi = {
   updateGroupDisplayName: async (groupId: string, newDisplayName: string) => {
     const response = await api.put(`/groups/${groupId}/display-name`, { newDisplayName });
     return response.data;
+  },
+  deleteGroup: async (groupId: string) => { // Add deleteGroup function
+    const response = await api.delete(`/groups/${groupId}`);
+    return response.data;
   }
 };
 
@@ -131,51 +136,8 @@ export const groupApi = {
 // In a real app, these would make actual API calls
 export const mockApi = {
   // Groups APIs (these will be replaced by real groupApi calls)
-  groups: {
-    getAll: async () => {
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 800));
-
-      // Mock response
-      return [
-        {
-          _id: "group1",
-          nome: "Família Silva",
-          membros: ["123", "456"],
-          criadoPor: "123",
-          orcamentos: ["budget1", "budget2"],
-          createdAt: new Date("2023-01-15").toISOString(),
-        },
-        {
-          _id: "group2",
-          nome: "Casal",
-          membros: ["123", "789"],
-          criadoPor: "123",
-          orcamentos: ["budget3"],
-          createdAt: new Date("2023-02-20").toISOString(),
-        },
-      ];
-    },
-
-    getById: async (id: string) => {
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 800));
-
-      // Mock response
-      return {
-        _id: id,
-        nome: id === "group1" ? "Família Silva" : "Casal",
-        membros: [
-          { _id: "123", nome: "Demo User", email: "demo@example.com" },
-          { _id: "456", nome: "João Silva", email: "joao@example.com" },
-        ],
-        criadoPor: "123",
-        orcamentos: ["budget1", "budget2"],
-        createdAt: new Date("2023-01-15").toISOString(),
-      };
-    },
-  },
-
+  // Removed mockApi.groups as it's no longer needed for Groups.tsx
+  // Keeping other mock APIs for now if they are used elsewhere
   // Budgets APIs
   budgets: {
     getByGroup: async (groupId: string) => {

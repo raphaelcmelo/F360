@@ -24,8 +24,8 @@ import {
   IconUsers,
   IconChartBar,
 } from '@tabler/icons-react';
-import { mockApi } from '../../services/api';
-import { Group as GroupType } from '../../types/group';
+import { groupApi } from '../../services/api'; // Import groupApi
+import { Group as GroupType } from '../../types/group'; // Use GroupType from group.ts
 
 export default function Groups() {
   const navigate = useNavigate();
@@ -49,7 +49,7 @@ export default function Groups() {
 
   const fetchGroups = async () => {
     try {
-      const data = await mockApi.groups.getAll();
+      const data = await groupApi.getUserGroups(); // Use real API
       setGroups(data);
     } catch (error) {
       console.error('Error fetching groups:', error);
@@ -65,8 +65,7 @@ export default function Groups() {
 
   const handleCreateGroup = async (values: typeof form.values) => {
     try {
-      // Mock API call - in a real app this would create the group
-      await new Promise(resolve => setTimeout(resolve, 800));
+      await groupApi.createGroup(values.nome); // Use real API
       
       notifications.show({
         title: 'Sucesso',
@@ -77,33 +76,35 @@ export default function Groups() {
       setCreateModalOpen(false);
       form.reset();
       fetchGroups();
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error creating group:', error);
       notifications.show({
         title: 'Erro',
-        message: 'Não foi possível criar o grupo',
+        message: error.response?.data?.error || 'Não foi possível criar o grupo',
         color: 'red',
       });
     }
   };
 
   const handleEditGroup = async (values: typeof form.values) => {
+    if (!editingGroup) return;
     try {
-      // Mock API call - in a real app this would update the group
-      await new Promise(resolve => setTimeout(resolve, 800));
+      await groupApi.updateGroupDisplayName(editingGroup._id, values.nome); // Use real API
       
       notifications.show({
         title: 'Sucesso',
-        message: 'Grupo atualizado com sucesso',
+        message: 'Nome de exibição do grupo atualizado com sucesso',
         color: 'green',
       });
       
       setEditingGroup(null);
       form.reset();
       fetchGroups();
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error updating group:', error);
       notifications.show({
         title: 'Erro',
-        message: 'Não foi possível atualizar o grupo',
+        message: error.response?.data?.error || 'Não foi possível atualizar o grupo',
         color: 'red',
       });
     }
@@ -111,8 +112,7 @@ export default function Groups() {
 
   const handleDeleteGroup = async (groupId: string) => {
     try {
-      // Mock API call - in a real app this would delete the group
-      await new Promise(resolve => setTimeout(resolve, 800));
+      await groupApi.deleteGroup(groupId); // Use real API
       
       notifications.show({
         title: 'Sucesso',
@@ -121,10 +121,11 @@ export default function Groups() {
       });
       
       fetchGroups();
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error deleting group:', error);
       notifications.show({
         title: 'Erro',
-        message: 'Não foi possível excluir o grupo',
+        message: error.response?.data?.error || 'Não foi possível excluir o grupo',
         color: 'red',
       });
     }
@@ -190,7 +191,7 @@ export default function Groups() {
                     <Group justify="space-between" wrap="nowrap">
                       <Stack gap="xs">
                         <Text size="lg" fw={500}>
-                          {group.nome}
+                          {group.displayName || group.nome} {/* Use displayName if available, fallback to nome */}
                         </Text>
                         <Group gap="xs">
                           <Badge
@@ -229,7 +230,7 @@ export default function Groups() {
                               leftSection={<IconEdit size={14} />}
                               onClick={() => {
                                 setEditingGroup(group);
-                                form.setValues({ nome: group.nome });
+                                form.setValues({ nome: group.displayName || group.nome }); // Set form value to displayName
                               }}
                             >
                               Editar

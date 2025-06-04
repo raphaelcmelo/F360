@@ -64,12 +64,13 @@ export const getUserGroups = async (req: AuthenticatedRequest, res: Response<Api
       return res.status(404).json({ success: false, error: 'User not found.' });
     }
 
-    const groupIds = user.grupos.map(g => g.groupId);
+    // Ensure user.grupos is an array before calling map
+    const groupIds = (user.grupos || []).map(g => g.groupId);
     const groups = await Group.find({ _id: { $in: groupIds } }).populate('membros', 'name email').lean(); // Fetch actual group documents
 
     // Merge display names from user's groups array into the group objects
     const groupsWithDisplayNames = groups.map(group => {
-      const userGroupEntry = user.grupos.find(g => g.groupId.equals(group._id));
+      const userGroupEntry = (user.grupos || []).find(g => g.groupId.equals(group._id));
       return {
         ...group,
         displayName: userGroupEntry ? userGroupEntry.displayName : group.nome // Use user's display name, fallback to group's actual name
@@ -117,7 +118,7 @@ export const inviteMemberToGroup = async (req: AuthenticatedRequest, res: Respon
     }
 
     // Check if the user is already a member of the group (by groupId)
-    if (invitedUser.grupos.some(g => g.groupId.equals(group._id))) {
+    if ((invitedUser.grupos || []).some(g => g.groupId.equals(group._id))) {
       return res.status(400).json({ success: false, error: 'User is already a member of this group.' });
     }
 
@@ -160,7 +161,7 @@ export const updateGroupDisplayName = async (req: AuthenticatedRequest, res: Res
     }
 
     // Check if the new display name conflicts with any other group the user has
-    const existingDisplayNameConflict = user.grupos.some(
+    const existingDisplayNameConflict = (user.grupos || []).some(
       g => !g.groupId.equals(groupId) && g.displayName === newDisplayName
     );
 
@@ -169,7 +170,7 @@ export const updateGroupDisplayName = async (req: AuthenticatedRequest, res: Res
     }
 
     // Find and update the specific group entry
-    const groupEntry = user.grupos.find(g => g.groupId.equals(groupId));
+    const groupEntry = (user.grupos || []).find(g => g.groupId.equals(groupId));
 
     if (!groupEntry) {
       return res.status(404).json({ success: false, error: 'Group not found in user\'s list.' });
@@ -189,5 +190,45 @@ export const updateGroupDisplayName = async (req: AuthenticatedRequest, res: Res
     }
     console.error('Error updating group display name:', error);
     res.status(500).json({ success: false, error: 'Server error updating group display name.' });
+  }
+};
+
+// Delete a group
+export const deleteGroup = async (req: AuthenticatedRequest, res: Response<ApiResponse>) => {
+  try {
+    const { groupId } = req.params;
+    const userId = req.user?._id;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'User not authenticated.' });
+    }
+
+    const group = await Group.findById(groupId);
+
+    if (!group) {
+      return res.status(404).json({ success: false, error: 'Group not found.' });
+    }
+
+    // Only the creator can delete the group
+    if (!group.criadoPor.equals(userId)) {
+      return res.status(403).json({ success: false, error: 'You are not authorized to delete this group.' });
+    }
+
+    // Remove the group reference from all members' user documents
+    await User.updateMany(
+      { 'grupos.groupId': groupId },
+      { $pull: { grupos: { groupId: groupId } } }
+    );
+
+    // Delete the group document
+    await Group.deleteOne({ _id: groupId });
+
+    res.status(200).json({
+      success: true,
+      message: 'Group deleted successfully.'
+    });
+  } catch (error: any) {
+    console.error('Error deleting group:', error);
+    res.status(500).json({ success: false, error: 'Server error deleting group.' });
   }
 };

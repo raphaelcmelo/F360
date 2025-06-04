@@ -14,6 +14,7 @@ export interface GroupInvite {
 export interface Group {
   _id: string;
   nome: string;
+  displayName: string; // Add displayName to the Group interface
   membros: string[] | GroupMember[];
   convites?: GroupInvite[];
   criadoPor: string;
