@@ -1,4 +1,5 @@
 import axios from "axios";
+import { Group } from "../types/user"; // Import Group type
 
 // Create an axios instance
 export const api = axios.create({
@@ -106,10 +107,26 @@ export const authApi = {
   },
 };
 
+// New API functions for Group management
+export const groupApi = {
+  createGroup: async (nome: string) => {
+    const response = await api.post("/groups", { nome });
+    return response.data.data;
+  },
+  getUserGroups: async (): Promise<Group[]> => {
+    const response = await api.get("/groups");
+    return response.data.data;
+  },
+  inviteMember: async (groupId: string, email: string) => {
+    const response = await api.post(`/groups/${groupId}/invite`, { email });
+    return response.data;
+  },
+};
+
 // For demonstration purposes, let's keep mock data for other parts if needed
 // In a real app, these would make actual API calls
 export const mockApi = {
-  // Groups APIs
+  // Groups APIs (these will be replaced by real groupApi calls)
   groups: {
     getAll: async () => {
       // Simulate API call delay

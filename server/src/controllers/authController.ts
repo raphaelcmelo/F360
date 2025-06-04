@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import User from "../models/User";
+import Group from "../models/Group"; // Import the new Group model
 import {
   LoginSchema,
   CreateUserSchema,
@@ -35,6 +36,18 @@ export const register = async (
     }
 
     const user = await User.create(validatedData);
+
+    // Create a default personal group for the new user
+    const personalGroup = await Group.create({
+      nome: `Grupo Pessoal de ${user.name}`,
+      membros: [user._id],
+      criadoPor: user._id,
+    });
+
+    // Link the user to their new personal group
+    user.grupos.push(personalGroup._id);
+    await user.save();
+
     const token = generateToken(user._id);
 
     res.status(201).json({
@@ -43,7 +56,7 @@ export const register = async (
         user,
         token,
       },
-      message: "User registered successfully",
+      message: "User registered successfully and personal group created.",
     });
   } catch (error: any) {
     if (error.name === "ZodError") {
@@ -55,6 +68,7 @@ export const register = async (
       return;
     }
 
+    console.error("Registration Error:", error); // Log the actual error for debugging
     res.status(500).json({
       success: false,
       error: "Server error during registration",
@@ -69,9 +83,11 @@ export const login = async (
   try {
     const validatedData = LoginSchema.parse(req.body);
 
-    const user = await User.findOne({ email: validatedData.email }).select(
-      "+password"
-    );
+    // Populate the 'grupos' field when fetching the user
+    const user = await User.findOne({ email: validatedData.email })
+      .select("+password")
+      .populate("grupos"); // Populate the groups
+
     if (!user || !user.isActive) {
       res.status(401).json({
         success: false,
@@ -109,6 +125,7 @@ export const login = async (
       return;
     }
 
+    console.error("Login Error:", error); // Log the actual error for debugging
     res.status(500).json({
       success: false,
       error: "Server error during login",
@@ -120,10 +137,24 @@ export const getProfile = async (
   req: AuthenticatedRequest,
   res: Response<ApiResponse>
 ): Promise<void> => {
-  res.json({
-    success: true,
-    data: req.user,
-  });
+  try {
+    // Ensure the user object in req.user has populated groups if needed
+    // If req.user is set by a middleware, that middleware should populate 'grupos'
+    // For now, assuming req.user is already populated or we don't need groups here.
+    // If not populated, you might need to fetch it again:
+    const user = await User.findById(req.user?._id).populate('grupos');
+    if (!user) {
+      res.status(404).json({ success: false, error: "User not found" });
+      return;
+    }
+    res.json({
+      success: true,
+      data: user.toJSON(), // Use toJSON to remove sensitive fields
+    });
+  } catch (error: any) {
+    console.error("Get Profile Error:", error);
+    res.status(500).json({ success: false, error: "Server error fetching profile" });
+  }
 };
 
 export const forgotPassword = async (

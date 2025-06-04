@@ -1,47 +1,29 @@
-import { useState, useEffect } from 'react';
-import { Select, Skeleton } from '@mantine/core';
-import { mockApi } from '../../services/api';
-import { Group } from '../../types/group';
+import { Select } from '@mantine/core';
+import { Group } from '../../types/user'; // Import the Group type
 
 interface GroupSelectorProps {
   value: string;
-  onChange: (groupId: string) => void;
+  onChange: (value: string | null) => void;
+  groups: Group[]; // New prop to receive the user's groups
 }
 
-export default function GroupSelector({ value, onChange }: GroupSelectorProps) {
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchGroups = async () => {
-      try {
-        const data = await mockApi.groups.getAll();
-        setGroups(data);
-      } catch (error) {
-        console.error('Error fetching groups:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchGroups();
-  }, []);
-
-  if (isLoading) {
-    return <Skeleton height={36} width={200} />;
-  }
+export default function GroupSelector({ value, onChange, groups }: GroupSelectorProps) {
+  const data = groups.map(group => ({
+    value: group._id,
+    label: group.nome,
+  }));
 
   return (
     <Select
-      label="Grupo financeiro"
       placeholder="Selecione um grupo"
-      data={groups.map(group => ({
-        value: group._id,
-        label: group.nome,
-      }))}
+      data={data}
       value={value}
-      onChange={(val) => val && onChange(val)}
-      style={{ width: 200 }}
+      onChange={onChange}
+      searchable
+      nothingFound="Nenhum grupo encontrado"
+      allowDeselect={false} // A user must always have a group selected
+      size="md"
+      w={250}
     />
   );
 }

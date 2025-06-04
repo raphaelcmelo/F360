@@ -36,7 +36,12 @@ const userSchema = new Schema<IUser>({
   passwordResetExpires: {
     type: Date,
     select: false
-  }
+  },
+  // New field: Array of group IDs the user is a member of
+  grupos: [{
+    type: Schema.Types.ObjectId,
+    ref: 'Group'
+  }]
 }, {
   timestamps: true
 });
