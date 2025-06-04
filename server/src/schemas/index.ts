@@ -97,3 +97,38 @@ export const UpdatePlannedBudgetItemSchema = z.object({
     .min(0, "O valor planejado não pode ser negativo.")
     .optional(),
 });
+
+export const CreateTransactionSchema = z.object({
+  grupoId: z.string().min(1, "O ID do grupo é obrigatório."),
+  data: z.string().refine((val) => !isNaN(new Date(val).getTime()), {
+    message: "Formato de data inválido.",
+  }),
+  categoria: z.enum(['renda', 'despesa', 'conta', 'poupanca'], {
+    errorMap: () => ({ message: "Tipo de categoria inválido." }),
+  }),
+  tipo: z
+    .string()
+    .min(1, "O tipo de lançamento é obrigatório.")
+    .max(200, "O tipo de lançamento não pode exceder 200 caracteres."),
+  valor: z
+    .number()
+    .min(0.01, "O valor deve ser maior que zero."),
+});
+
+export const UpdateTransactionSchema = z.object({
+  data: z.string().refine((val) => !isNaN(new Date(val).getTime()), {
+    message: "Formato de data inválido.",
+  }).optional(),
+  categoria: z.enum(['renda', 'despesa', 'conta', 'poupanca'], {
+    errorMap: () => ({ message: "Tipo de categoria inválido." }),
+  }).optional(),
+  tipo: z
+    .string()
+    .min(1, "O tipo de lançamento é obrigatório.")
+    .max(200, "O tipo de lançamento não pode exceder 200 caracteres.")
+    .optional(),
+  valor: z
+    .number()
+    .min(0.01, "O valor deve ser maior que zero.")
+    .optional(),
+});

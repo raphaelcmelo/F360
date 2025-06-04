@@ -2,6 +2,7 @@ import axios from "axios";
 import { Group, User } from "../types/user"; // Import updated Group and User types
 import { Group as GroupType } from "../types/group"; // Import GroupType from group.ts
 import { Budget, PlannedBudgetItem } from "../types/budget";
+import { Transaction } from "../types/transaction"; // Import Transaction type
 
 // Create an axios instance
 export const api = axios.create({
@@ -199,118 +200,154 @@ export const plannedBudgetItemApi = {
   },
 };
 
-// For demonstration purposes, let's keep mock data for other parts if needed
-// In a real app, these would make actual API calls
-export const mockApi = {
-  // Transactions APIs
-  transactions: {
-    getByGroup: async (groupId: string, startDate: string, endDate: string) => {
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 800));
+export const transactionApi = {
+  createTransaction: async (
+    grupoId: string,
+    data: string,
+    categoria: "renda" | "despesa" | "conta" | "poupanca",
+    tipo: string,
+    valor: number
+  ): Promise<Transaction> => {
+    const response = await api.post("/transactions", {
+      grupoId,
+      data,
+      categoria,
+      tipo,
+      valor,
+    });
+    return response.data.data;
+  },
+  getTransactionsByGroup: async (
+    groupId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<Transaction[]> => {
+    const response = await api.get(
+      `/transactions/group/${groupId}?startDate=${startDate}&endDate=${endDate}`
+    );
+    return response.data.data;
+  },
+  getTransactionById: async (transactionId: string): Promise<Transaction> => {
+    const response = await api.get(`/transactions/${transactionId}`);
+    return response.data.data;
+  },
+  updateTransaction: async (
+    transactionId: string,
+    updates: Partial<Transaction>
+  ): Promise<Transaction> => {
+    const response = await api.put(`/transactions/${transactionId}`, updates);
+    return response.data.data;
+  },
+  deleteTransaction: async (transactionId: string) => {
+    const response = await api.delete(`/transactions/${transactionId}`);
+    return response.data;
+  },
+};
 
-      // Mock user mapping for 'criadoPor'
-      const userMap: { [key: string]: string } = {
-        "123": "Demo User",
-        "456": "João Silva",
-        "789": "Maria Souza",
+// Remove mockApi as it's no longer needed for transactions
+export const mockApi = {
+  // Transactions APIs - REMOVED
+  // budgets - kept for now as it's used in Transactions.tsx for planned items
+  budgets: {
+    getByGroup: async (groupId: string) => {
+      // Simulate API call delay
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Mock budget data for the current month
+      const currentDate = new Date();
+      const currentMonth = currentDate.getMonth();
+      const currentYear = currentDate.getFullYear();
+
+      const mockBudget: Budget = {
+        _id: "budget1",
+        grupoId: groupId,
+        dataInicio: new Date(currentYear, currentMonth, 1).toISOString(),
+        dataFim: new Date(currentYear, currentMonth + 1, 0).toISOString(),
+        categorias: [
+          {
+            _id: "cat1",
+            tipo: "renda",
+            lancamentosPlanejados: [
+              {
+                _id: "item1",
+                nome: "Salário",
+                valorPlanejado: 5000,
+                valorRealizado: 5000,
+              },
+              {
+                _id: "item2",
+                nome: "Freelance",
+                valorPlanejado: 1000,
+                valorRealizado: 1200,
+              },
+            ],
+          },
+          {
+            _id: "cat2",
+            tipo: "despesa",
+            lancamentosPlanejados: [
+              {
+                _id: "item3",
+                nome: "Aluguel",
+                valorPlanejado: 1500,
+                valorRealizado: 1500,
+              },
+              {
+                _id: "item4",
+                nome: "Supermercado",
+                valorPlanejado: 800,
+                valorRealizado: 630,
+              },
+              {
+                _id: "item5",
+                nome: "Transporte",
+                valorPlanejado: 200,
+                valorRealizado: 150,
+              },
+            ],
+          },
+          {
+            _id: "cat3",
+            tipo: "conta",
+            lancamentosPlanejados: [
+              {
+                _id: "item6",
+                nome: "Energia",
+                valorPlanejado: 150,
+                valorRealizado: 140,
+              },
+              {
+                _id: "item7",
+                nome: "Internet",
+                valorPlanejado: 100,
+                valorRealizado: 120,
+              },
+            ],
+          },
+          {
+            _id: "cat4",
+            tipo: "poupanca",
+            lancamentosPlanejados: [
+              {
+                _id: "item8",
+                nome: "Reserva de emergência",
+                valorPlanejado: 500,
+                valorRealizado: 500,
+              },
+              {
+                _id: "item9",
+                nome: "Viagem",
+                valorPlanejado: 300,
+                valorRealizado: 0,
+              },
+            ],
+          },
+        ],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
 
-      // Mock response with random dates within the month
-      const currentMonth = new Date().getMonth();
-      const currentYear = new Date().getFullYear();
-
-      const mockTransactions = [
-        {
-          _id: "trans1",
-          grupoId: groupId,
-          criadoPor: "123",
-          criadoPorNome: userMap["123"],
-          data: new Date(currentYear, currentMonth, 5).toISOString(),
-          categoria: "renda",
-          tipo: "Salário",
-          valor: 5000,
-          createdAt: new Date(currentYear, currentMonth, 5).toISOString(),
-        },
-        {
-          _id: "trans2",
-          grupoId: groupId,
-          criadoPor: "123",
-          criadoPorNome: userMap["123"],
-          data: new Date(currentYear, currentMonth, 10).toISOString(),
-          categoria: "despesa",
-          tipo: "Aluguel",
-          valor: 1500,
-          createdAt: new Date(currentYear, currentMonth, 10).toISOString(),
-        },
-        {
-          _id: "trans3",
-          grupoId: groupId,
-          criadoPor: "456",
-          criadoPorNome: userMap["456"],
-          data: new Date(currentYear, currentMonth, 12).toISOString(),
-          categoria: "despesa",
-          tipo: "Supermercado",
-          valor: 350,
-          createdAt: new Date(currentYear, currentMonth, 12).toISOString(),
-        },
-        {
-          _id: "trans4",
-          grupoId: groupId,
-          criadoPor: "123",
-          criadoPorNome: userMap["123"],
-          data: new Date(currentYear, currentMonth, 15).toISOString(),
-          categoria: "despesa",
-          tipo: "Supermercado",
-          valor: 280,
-          createdAt: new Date(currentYear, currentMonth, 15).toISOString(),
-        },
-        {
-          _id: "trans5",
-          grupoId: groupId,
-          criadoPor: "123",
-          criadoPorNome: userMap["123"],
-          data: new Date(currentYear, currentMonth, 18).toISOString(),
-          categoria: "conta",
-          tipo: "Energia",
-          valor: 140,
-          createdAt: new Date(currentYear, currentMonth, 18).toISOString(),
-        },
-        {
-          _id: "trans6",
-          grupoId: groupId,
-          criadoPor: "123",
-          criadoPorNome: userMap["123"],
-          data: new Date(currentYear, currentMonth, 18).toISOString(),
-          categoria: "conta",
-          tipo: "Internet",
-          valor: 120,
-          createdAt: new Date(currentYear, currentMonth, 18).toISOString(),
-        },
-        {
-          _id: "trans7",
-          grupoId: groupId,
-          criadoPor: "456",
-          criadoPorNome: userMap["456"],
-          data: new Date(currentYear, currentMonth, 20).toISOString(),
-          categoria: "renda",
-          tipo: "Freelance",
-          valor: 1200,
-          createdAt: new Date(currentYear, currentMonth, 20).toISOString(),
-        },
-        {
-          _id: "trans8",
-          grupoId: groupId,
-          criadoPor: "123",
-          criadoPorNome: userMap["123"],
-          data: new Date(currentYear, currentMonth, 25).toISOString(),
-          categoria: "poupanca",
-          tipo: "Reserva de emergência",
-          valor: 500,
-          createdAt: new Date(currentYear, currentMonth, 25).toISOString(),
-        },
-      ];
-
-      return mockTransactions;
+      return mockBudget;
     },
   },
 };

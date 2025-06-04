@@ -15,6 +15,7 @@ import {
 import { protect } from "../middleware/authMiddleware";
 import budgetRoutes from "./budgetRoutes"; // Import budget routes
 import budgetItemRoutes from "./budgetItemRoutes"; // Import budget item routes
+import transactionRoutes from "./transactionRoutes"; // Import transaction routes
 
 const router = Router();
 
@@ -34,5 +35,6 @@ router.post("/groups/:groupId/invite", protect, inviteMemberToGroup);
 // Budget routes
 router.use("/budgets", budgetRoutes);
 router.use("/budget-items", budgetItemRoutes);
+router.use("/transactions", transactionRoutes); // Use transaction routes
 
 export default router;

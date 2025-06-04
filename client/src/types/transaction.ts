@@ -1,9 +1,9 @@
 export interface Transaction {
   _id: string;
   grupoId: string;
-  criadoPor: string; // User ID
-  criadoPorNome: string; // User Name
-  data: string;
+  criadoPor: string;
+  criadoPorNome: string;
+  data: string; // ISO date string
   categoria: "renda" | "despesa" | "conta" | "poupanca";
   tipo: string;
   valor: number;

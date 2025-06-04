@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Paper,
   Text,
@@ -12,6 +12,8 @@ import {
   Select,
   Stack,
   Modal,
+  Loader,
+  Center,
 } from "@mantine/core";
 import { useForm, FormProvider, Controller } from "react-hook-form";
 import { z } from "zod";
@@ -26,11 +28,12 @@ import {
   IconSearch,
   IconFilter,
 } from "@tabler/icons-react";
-import { mockApi } from "../../services/api";
+import { mockApi, transactionApi } from "../../services/api"; // Import transactionApi
 import GroupSelector from "../../components/ui/GroupSelector";
 import { Transaction } from "../../types/transaction";
 import { Budget as BudgetType, PlannedItem } from "../../types/budget";
 import CurrencyInput from "../../components/ui/CurrencyInput";
+import { notifications } from "@mantine/notifications";
 
 // Define the schema for the transaction form
 const transactionSchema = z.object({
@@ -45,7 +48,7 @@ const transactionSchema = z.object({
 type TransactionFormValues = z.infer<typeof transactionSchema>;
 
 export default function Transactions() {
-  const [selectedGroupId, setSelectedGroupId] = useState<string>("group1");
+  const [selectedGroupId, setSelectedGroupId] = useState<string>("group1"); // TODO: Replace with actual user's active group ID
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -63,58 +66,73 @@ export default function Transactions() {
     },
   });
 
-  useEffect(() => {
-    const fetchTransactionsAndBudget = async () => {
-      setIsLoading(true);
-      try {
-        const currentDate = new Date();
-        const startDate = new Date(
-          currentDate.getFullYear(),
-          currentDate.getMonth(),
-          1
-        ).toISOString();
-        const endDate = new Date(
-          currentDate.getFullYear(),
-          currentDate.getMonth() + 1,
-          0
-        ).toISOString();
+  const fetchTransactionsAndBudget = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const currentDate = new Date();
+      const startDate = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth(),
+        1
+      ).toISOString();
+      const endDate = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth() + 1,
+        0
+      ).toISOString();
 
-        const [transactionsData, budgetData] = await Promise.all([
-          mockApi.transactions.getByGroup(selectedGroupId, startDate, endDate),
-          mockApi.budgets.getByGroup(selectedGroupId),
-        ]);
+      const [transactionsData, budgetData] = await Promise.all([
+        transactionApi.getTransactionsByGroup(
+          selectedGroupId,
+          startDate,
+          endDate
+        ), // Use real API
+        mockApi.budgets.getByGroup(selectedGroupId), // Keep mock for budget for now
+      ]);
 
-        setTransactions(transactionsData);
-        setBudget(budgetData);
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchTransactionsAndBudget();
+      setTransactions(transactionsData);
+      setBudget(budgetData);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      notifications.show({
+        title: "Erro",
+        message: "Não foi possível carregar os lançamentos ou orçamento.",
+        color: "red",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   }, [selectedGroupId]);
+
+  useEffect(() => {
+    fetchTransactionsAndBudget();
+  }, [fetchTransactionsAndBudget]);
 
   const handleSubmit = async (values: TransactionFormValues) => {
     try {
-      const newTransaction: Transaction = {
-        _id: Math.random().toString(),
-        grupoId: selectedGroupId,
-        criadoPor: "123",
-        criadoPorNome: "Demo User",
-        data: values.data.toISOString(),
-        categoria: values.categoria,
-        tipo: values.tipo,
-        valor: values.valor,
-        createdAt: new Date().toISOString(),
-      };
+      const newTransaction = await transactionApi.createTransaction(
+        selectedGroupId,
+        values.data.toISOString(),
+        values.categoria,
+        values.tipo,
+        values.valor
+      );
 
       setTransactions((prev) => [...prev, newTransaction]);
       setIsModalOpen(false);
       form.reset();
+      notifications.show({
+        title: "Sucesso",
+        message: "Lançamento criado com sucesso!",
+        color: "green",
+      });
     } catch (error) {
       console.error("Error creating transaction:", error);
+      notifications.show({
+        title: "Erro",
+        message: "Não foi possível criar o lançamento.",
+        color: "red",
+      });
     }
   };
 
@@ -163,10 +181,7 @@ export default function Transactions() {
           <Button
             variant="light"
             leftSection={<IconRefresh size={16} />}
-            onClick={() => {
-              setIsLoading(true);
-              setTimeout(() => setIsLoading(false), 800);
-            }}
+            onClick={fetchTransactionsAndBudget} // Refresh from backend
           >
             Atualizar
           </Button>
@@ -223,7 +238,24 @@ export default function Transactions() {
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {!isLoading &&
+            {isLoading ? (
+              <Table.Tr>
+                <Table.Td colSpan={5}>
+                  <Center>
+                    <Loader size="sm" />
+                    <Text ml="sm" c="dimmed">
+                      Carregando...
+                    </Text>
+                  </Center>
+                </Table.Td>
+              </Table.Tr>
+            ) : sortedTransactions.length === 0 ? (
+              <Table.Tr>
+                <Table.Td colSpan={5} style={{ textAlign: "center" }}>
+                  <Text c="dimmed">Nenhum lançamento encontrado</Text>
+                </Table.Td>
+              </Table.Tr>
+            ) : (
               sortedTransactions.map((transaction) => (
                 <Table.Tr key={transaction._id}>
                   <Table.Td>
@@ -266,20 +298,7 @@ export default function Transactions() {
                     </Text>
                   </Table.Td>
                 </Table.Tr>
-              ))}
-            {!isLoading && sortedTransactions.length === 0 && (
-              <Table.Tr>
-                <Table.Td colSpan={5} style={{ textAlign: "center" }}>
-                  <Text c="dimmed">Nenhum lançamento encontrado</Text>
-                </Table.Td>
-              </Table.Tr>
-            )}
-            {isLoading && (
-              <Table.Tr>
-                <Table.Td colSpan={5} style={{ textAlign: "center" }}>
-                  <Text c="dimmed">Carregando...</Text>
-                </Table.Td>
-              </Table.Tr>
+              ))
             )}
           </Table.Tbody>
         </Table>
@@ -287,7 +306,10 @@ export default function Transactions() {
 
       <Modal
         opened={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          form.reset(); // Reset form on close
+        }}
         title="Novo Lançamento"
         size="md"
       >
@@ -306,6 +328,8 @@ export default function Transactions() {
                     placeholder="Selecione a data"
                     error={form.formState.errors.data?.message}
                     {...field}
+                    value={field.value ? new Date(field.value) : null} // Ensure Date object for DatePickerInput
+                    onChange={(val) => field.onChange(val)}
                   />
                 )}
               />
