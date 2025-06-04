@@ -86,7 +86,7 @@ export const authApi = {
   },
 
   getProfile: async () => {
-    const response = await api.get("/auth/profile");
+    const response = await api.get("/auth/me");
     return response.data.data; // Assuming data contains user profile
   },
 
@@ -123,13 +123,16 @@ export const groupApi = {
     return response.data;
   },
   updateGroupDisplayName: async (groupId: string, newDisplayName: string) => {
-    const response = await api.put(`/groups/${groupId}/display-name`, { newDisplayName });
+    const response = await api.put(`/groups/${groupId}/display-name`, {
+      newDisplayName,
+    });
     return response.data;
   },
-  deleteGroup: async (groupId: string) => { // Add deleteGroup function
+  deleteGroup: async (groupId: string) => {
+    // Add deleteGroup function
     const response = await api.delete(`/groups/${groupId}`);
     return response.data;
-  }
+  },
 };
 
 // For demonstration purposes, let's keep mock data for other parts if needed

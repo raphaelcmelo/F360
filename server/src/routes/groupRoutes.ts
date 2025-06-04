@@ -1,26 +1,26 @@
-import { Router } from 'express';
+import { Router } from "express";
 import {
   createGroup,
   getUserGroups,
   inviteMemberToGroup,
   updateGroupDisplayName,
-  deleteGroup, // Import the new deleteGroup function
-} from '../controllers/groupController';
-import { protect } from '../middleware/authMiddleware';
+  deleteGroup,
+} from "../controllers/groupController";
+import { authenticateToken } from "../middleware/auth";
 
 const router = Router();
 
-router.route('/')
-  .post(protect, createGroup)
-  .get(protect, getUserGroups);
+router
+  .route("/")
+  .post(authenticateToken, createGroup)
+  .get(authenticateToken, getUserGroups);
 
-router.route('/:groupId/invite')
-  .post(protect, inviteMemberToGroup);
+router.route("/:groupId/invite").post(authenticateToken, inviteMemberToGroup);
 
-router.route('/:groupId/display-name')
-  .put(protect, updateGroupDisplayName);
+router
+  .route("/:groupId/display-name")
+  .put(authenticateToken, updateGroupDisplayName);
 
-router.route('/:groupId')
-  .delete(protect, deleteGroup); // Add the delete route
+router.route("/:groupId").delete(authenticateToken, deleteGroup);
 
 export default router;
