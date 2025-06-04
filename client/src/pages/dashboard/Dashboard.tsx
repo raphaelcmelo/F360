@@ -22,18 +22,18 @@ import {
   IconInfoCircle,
 } from "@tabler/icons-react";
 import {
-  mockApi,
   groupApi,
   authApi,
   budgetApi,
   plannedBudgetItemApi,
-} from "../../services/api"; // Ensure plannedBudgetItemApi is imported
+  transactionApi, // Import transactionApi
+} from "../../services/api";
 import BudgetSummaryCard from "./components/BudgetSummaryCard";
 import CategoryDistributionChart from "./components/CategoryDistributionChart";
 import BudgetVsActualChart from "./components/BudgetVsActualChart";
 import RecentTransactionsTable from "./components/RecentTransactionsTable";
 import GroupSelector from "../../components/ui/GroupSelector";
-import { Budget, PlannedBudgetItem, BudgetCategory } from "../../types/budget"; // Import BudgetCategory
+import { Budget, PlannedBudgetItem, BudgetCategory } from "../../types/budget";
 import { Transaction } from "../../types/transaction";
 import { Group as BudgetGroupType, User } from "../../types/user";
 
@@ -206,14 +206,14 @@ export default function Dashboard() {
           };
         }
 
-        // 4. Fetch transactions (this part can remain similar, using mock for now)
+        // 4. Fetch transactions using the real transactionApi
         const startDate = new Date(currentYear, currentMonth, 1).toISOString();
         const endDate = new Date(
           currentYear,
           currentMonth + 1,
           0
         ).toISOString();
-        const transactionsData = await mockApi.transactions.getByGroup(
+        const transactionsData = await transactionApi.getTransactionsByGroup(
           selectedGroupId,
           startDate,
           endDate

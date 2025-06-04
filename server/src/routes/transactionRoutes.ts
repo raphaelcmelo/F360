@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect } from "../middleware/authMiddleware";
+import { authenticateToken } from "../middleware/auth";
 import {
   createTransaction,
   getTransactionsByGroup,
@@ -11,7 +11,7 @@ import {
 const router = Router();
 
 // Protect all transaction routes
-router.use(protect);
+router.use(authenticateToken);
 
 router.post("/", createTransaction);
 router.get("/group/:groupId", getTransactionsByGroup);

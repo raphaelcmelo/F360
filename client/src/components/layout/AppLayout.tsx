@@ -34,9 +34,6 @@ export default function AppLayout() {
     setColorScheme(colorScheme === "dark" ? "light" : "dark");
   };
 
-  console.log(user);
-
-  // Get page title based on current route
   const getPageTitle = () => {
     const path = location.pathname;
 

@@ -28,10 +28,19 @@ import {
   IconSearch,
   IconFilter,
 } from "@tabler/icons-react";
-import { mockApi, transactionApi } from "../../services/api"; // Import transactionApi
+import {
+  transactionApi,
+  budgetApi,
+  plannedBudgetItemApi,
+} from "../../services/api"; // Import budgetApi and plannedBudgetItemApi, remove mockApi
 import GroupSelector from "../../components/ui/GroupSelector";
 import { Transaction } from "../../types/transaction";
-import { Budget as BudgetType, PlannedItem } from "../../types/budget";
+import {
+  Budget as BudgetType,
+  PlannedItem,
+  PlannedBudgetItem,
+  BudgetCategory,
+} from "../../types/budget";
 import CurrencyInput from "../../components/ui/CurrencyInput";
 import { notifications } from "@mantine/notifications";
 
@@ -70,28 +79,123 @@ export default function Transactions() {
     setIsLoading(true);
     try {
       const currentDate = new Date();
-      const startDate = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth(),
-        1
-      ).toISOString();
-      const endDate = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth() + 1,
-        0
-      ).toISOString();
+      const currentMonth = currentDate.getMonth();
+      const currentYear = currentDate.getFullYear();
 
-      const [transactionsData, budgetData] = await Promise.all([
-        transactionApi.getTransactionsByGroup(
-          selectedGroupId,
-          startDate,
-          endDate
-        ), // Use real API
-        mockApi.budgets.getByGroup(selectedGroupId), // Keep mock for budget for now
-      ]);
+      const startDate = new Date(currentYear, currentMonth, 1).toISOString();
+      const endDate = new Date(currentYear, currentMonth + 1, 0).toISOString();
+
+      // Fetch all budgets for the selected group
+      const groupBudgets = await budgetApi.getGroupBudgets(selectedGroupId);
+
+      let currentMonthBudget: BudgetType | null = null;
+
+      // Find the budget for the current month
+      for (const b of groupBudgets) {
+        const budgetStartDate = new Date(b.dataInicio);
+        if (
+          budgetStartDate.getMonth() === currentMonth &&
+          budgetStartDate.getFullYear() === currentYear
+        ) {
+          currentMonthBudget = b;
+          break;
+        }
+      }
+
+      let fetchedBudget: BudgetType | null = null;
+      if (currentMonthBudget) {
+        // If a budget for the current month exists, fetch its detailed planned items
+        const plannedItems: PlannedBudgetItem[] =
+          await plannedBudgetItemApi.getPlannedBudgetItemsForBudget(
+            currentMonthBudget._id
+          );
+
+        // Transform flat plannedItems into categorized structure for UI
+        const transformedCategories: BudgetCategory[] = [
+          { tipo: "renda", lancamentosPlanejados: [] },
+          { tipo: "despesa", lancamentosPlanejados: [] },
+          { tipo: "conta", lancamentosPlanejados: [] },
+          { tipo: "poupanca", lancamentosPlanejados: [] },
+        ];
+
+        plannedItems.forEach((item) => {
+          const category = transformedCategories.find(
+            (cat) => cat.tipo === item.categoryType
+          );
+          if (category) {
+            category.lancamentosPlanejados.push(item);
+          }
+        });
+
+        // Calculate aggregated planned totals (optional, but good for consistency)
+        const totalRendaPlanejado =
+          transformedCategories
+            .find((c) => c.tipo === "renda")
+            ?.lancamentosPlanejados.reduce(
+              (sum, item) => sum + item.valorPlanejado,
+              0
+            ) || 0;
+        const totalDespesaPlanejado =
+          transformedCategories
+            .find((c) => c.tipo === "despesa")
+            ?.lancamentosPlanejados.reduce(
+              (sum, item) => sum + item.valorPlanejado,
+              0
+            ) || 0;
+        const totalContaPlanejado =
+          transformedCategories
+            .find((c) => c.tipo === "conta")
+            ?.lancamentosPlanejados.reduce(
+              (sum, item) => sum + item.valorPlanejado,
+              0
+            ) || 0;
+        const totalPoupancaPlanejado =
+          transformedCategories
+            .find((c) => c.tipo === "poupanca")
+            ?.lancamentosPlanejados.reduce(
+              (sum, item) => sum + item.valorPlanejado,
+              0
+            ) || 0;
+
+        fetchedBudget = {
+          ...currentMonthBudget,
+          categorias: transformedCategories,
+          totalRendaPlanejado,
+          totalDespesaPlanejado,
+          totalContaPlanejado,
+          totalPoupancaPlanejado,
+        };
+      } else {
+        // If no budget for the current month, set a default empty budget structure
+        fetchedBudget = {
+          _id: "", // Placeholder
+          grupoId: selectedGroupId,
+          dataInicio: new Date(currentYear, currentMonth, 1).toISOString(),
+          dataFim: new Date(currentYear, currentMonth + 1, 0).toISOString(),
+          criadoPor: "", // Placeholder
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          categorias: [
+            { tipo: "renda", lancamentosPlanejados: [] },
+            { tipo: "despesa", lancamentosPlanejados: [] },
+            { tipo: "conta", lancamentosPlanejados: [] },
+            { tipo: "poupanca", lancamentosPlanejados: [] },
+          ],
+          totalRendaPlanejado: 0,
+          totalDespesaPlanejado: 0,
+          totalContaPlanejado: 0,
+          totalPoupancaPlanejado: 0,
+        };
+      }
+
+      const transactionsData = await transactionApi.getTransactionsByGroup(
+        selectedGroupId,
+        startDate,
+        endDate
+      );
 
       setTransactions(transactionsData);
-      setBudget(budgetData);
+      setBudget(fetchedBudget);
     } catch (error) {
       console.error("Error fetching data:", error);
       notifications.show({
