@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Grid, Paper, Text, SimpleGrid, Button, Group, ActionIcon, Menu, Stack, Alert } from '@mantine/core';
+import { Grid, Paper, Text, SimpleGrid, Button, Group, ActionIcon, Menu, Stack, Alert, Modal, TextInput } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
 import { motion } from 'framer-motion';
 import { IconDotsVertical, IconDownload, IconRefresh, IconInfoCircle } from '@tabler/icons-react';
-import { mockApi, groupApi, authApi } from '../../services/api'; // Import groupApi and authApi
+import { mockApi, groupApi, authApi } from '../../services/api';
 import BudgetSummaryCard from './components/BudgetSummaryCard';
 import CategoryDistributionChart from './components/CategoryDistributionChart';
 import BudgetVsActualChart from './components/BudgetVsActualChart';
@@ -10,7 +11,7 @@ import RecentTransactionsTable from './components/RecentTransactionsTable';
 import GroupSelector from '../../components/ui/GroupSelector';
 import { Budget } from '../../types/budget';
 import { Transaction } from '../../types/transaction';
-import { Group as BudgetGroupType, User } from '../../types/user'; // Alias Group to BudgetGroupType to avoid conflict
+import { Group as BudgetGroupType, User } from '../../types/user';
 
 export default function Dashboard() {
   const [userGroups, setUserGroups] = useState<BudgetGroupType[]>([]);
@@ -20,33 +21,38 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [hasNoGroups, setHasNoGroups] = useState(false);
 
-  useEffect(() => {
-    const fetchUserAndGroups = async () => {
-      setIsLoading(true);
-      try {
-        const profileData: User = await authApi.getProfile();
-        if (profileData && profileData.grupos && profileData.grupos.length > 0) {
-          setUserGroups(profileData.grupos);
-          // Set the first group as default if no group is selected yet
-          if (!selectedGroupId) {
-            setSelectedGroupId(profileData.grupos[0]._id);
-          }
-          setHasNoGroups(false);
-        } else {
-          setHasNoGroups(true);
-          setSelectedGroupId(null); // Ensure no group is selected if none exist
+  // State for Create Group Modal
+  const [createGroupModalOpened, { open: openCreateGroupModal, close: closeCreateGroupModal }] = useDisclosure(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [createGroupError, setCreateGroupError] = useState<string | null>(null);
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+
+  const fetchUserGroups = async () => {
+    setIsLoading(true);
+    try {
+      const groupsData: BudgetGroupType[] = await groupApi.getUserGroups();
+      if (groupsData && groupsData.length > 0) {
+        setUserGroups(groupsData);
+        if (!selectedGroupId) {
+          setSelectedGroupId(groupsData[0]._id);
         }
-      } catch (error) {
-        console.error('Error fetching user profile or groups:', error);
+        setHasNoGroups(false);
+      } else {
         setHasNoGroups(true);
         setSelectedGroupId(null);
-      } finally {
-        setIsLoading(false);
       }
-    };
+    } catch (error) {
+      console.error('Error fetching user groups:', error);
+      setHasNoGroups(true);
+      setSelectedGroupId(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    fetchUserAndGroups();
-  }, []); // Run once on component mount to get user's groups
+  useEffect(() => {
+    fetchUserGroups();
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -59,12 +65,10 @@ export default function Dashboard() {
 
       setIsLoading(true);
       try {
-        // Get current month for mock data
         const currentDate = new Date();
         const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).toISOString();
         const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).toISOString();
         
-        // Fetch budget and transactions using the selected group ID
         const [budgetData, transactionsData] = await Promise.all([
           mockApi.budgets.getByGroup(selectedGroupId),
           mockApi.transactions.getByGroup(selectedGroupId, startDate, endDate)
@@ -82,7 +86,27 @@ export default function Dashboard() {
     };
     
     fetchData();
-  }, [selectedGroupId]); // Re-fetch data when selectedGroupId changes
+  }, [selectedGroupId]);
+
+  const handleCreateGroup = async () => {
+    setCreateGroupError(null);
+    setIsCreatingGroup(true);
+    try {
+      await groupApi.createGroup(newGroupName);
+      closeCreateGroupModal();
+      setNewGroupName('');
+      await fetchUserGroups(); // Re-fetch groups to update the selector
+    } catch (error: any) {
+      console.error('Error creating group:', error);
+      if (error.response && error.response.data && error.response.data.error) {
+        setCreateGroupError(error.response.data.error);
+      } else {
+        setCreateGroupError('Erro ao criar grupo. Tente novamente.');
+      }
+    } finally {
+      setIsCreatingGroup(false);
+    }
+  };
 
   if (isLoading && !selectedGroupId && !hasNoGroups) {
     return (
@@ -115,10 +139,29 @@ export default function Dashboard() {
         >
           Você não está vinculado a nenhum grupo orçamentário. Para começar a gerenciar suas finanças,
           crie um novo grupo ou peça para ser convidado para um grupo existente.
-          <Button mt="md" onClick={() => alert('Funcionalidade de criar grupo em breve!')}>
+          <Button mt="md" onClick={openCreateGroupModal}>
             Criar Novo Grupo
           </Button>
         </Alert>
+
+        <Modal opened={createGroupModalOpened} onClose={closeCreateGroupModal} title="Criar Novo Grupo Orçamentário" centered>
+          <Stack>
+            <TextInput
+              label="Nome de Grupo Orçamentário"
+              placeholder="Ex: Família Silva, Casal, Viagem 2024"
+              value={newGroupName}
+              onChange={(event) => {
+                setNewGroupName(event.currentTarget.value);
+                setCreateGroupError(null); // Clear error on change
+              }}
+              error={createGroupError}
+              required
+            />
+            <Button onClick={handleCreateGroup} loading={isCreatingGroup} disabled={!newGroupName.trim()}>
+              Criar Grupo
+            </Button>
+          </Stack>
+        </Modal>
       </motion.div>
     );
   }
@@ -132,9 +175,9 @@ export default function Dashboard() {
     >
       <Group justify="space-between" mb="xl">
         <GroupSelector
-          value={selectedGroupId || ''} // Pass empty string if null
+          value={selectedGroupId || ''}
           onChange={setSelectedGroupId}
-          groups={userGroups} // Pass the fetched groups to the selector
+          groups={userGroups}
         />
         
         <Group>
@@ -142,12 +185,9 @@ export default function Dashboard() {
             variant="light"
             leftSection={<IconRefresh size={16} />}
             onClick={() => {
-              // Trigger re-fetch of data for the current selected group
               if (selectedGroupId) {
                 setIsLoading(true);
-                // A small delay to simulate network request, then re-fetch
                 setTimeout(() => {
-                  // Re-trigger the useEffect for selectedGroupId
                   setSelectedGroupId(selectedGroupId); 
                 }, 800);
               }

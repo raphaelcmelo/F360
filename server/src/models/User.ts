@@ -1,79 +1,24 @@
-import mongoose, { Schema } from "mongoose";
-import bcrypt from "bcryptjs";
-import { IUser } from "../types";
+import mongoose, { Schema, Document } from 'mongoose';
 
-const userSchema = new Schema<IUser>(
-  {
-    email: {
-      type: String,
-      required: true,
-      unique: true,
-      lowercase: true,
-      trim: true,
-    },
-    password: {
-      type: String,
-      required: true,
-      minlength: 6,
-    },
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    role: {
-      type: String,
-      enum: ["admin", "user"],
-      default: "user",
-    },
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
-    passwordResetToken: {
-      type: String,
-      select: false,
-    },
-    passwordResetExpires: {
-      type: Date,
-      select: false,
-    },
-    // New field: Array of group IDs the user is a member of
-    grupos: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: "Group",
-      },
-    ],
-  },
-  {
-    timestamps: true,
-  }
-);
+export interface IUser extends Document {
+  name: string;
+  email: string;
+  password?: string;
+  grupos: { groupId: mongoose.Types.ObjectId; displayName: string }[]; // Updated to store groupId and displayName
+  createdAt: Date;
+  updatedAt: Date;
+}
 
-// Hash password before saving
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
-
-  this.password = await bcrypt.hash(this.password, 12);
-  next();
+const userSchema = new Schema<IUser>({
+  name: { type: String, required: true, trim: true },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  password: { type: String, required: false },
+  grupos: [{ // Updated to store groupId and displayName
+    groupId: { type: Schema.Types.ObjectId, ref: 'Group', required: true },
+    displayName: { type: String, required: true, trim: true }
+  }]
+}, {
+  timestamps: true
 });
 
-// Compare password method
-userSchema.methods.comparePassword = async function (
-  candidatePassword: string
-): Promise<boolean> {
-  return bcrypt.compare(candidatePassword, this.password);
-};
-
-// Remove password from JSON output
-userSchema.methods.toJSON = function () {
-  const userObject = this.toObject();
-  delete userObject.password;
-  delete userObject.passwordResetToken;
-  delete userObject.passwordResetExpires;
-  delete userObject.__v; // Also remove version key
-  return userObject;
-};
-
-export default mongoose.model<IUser>("User", userSchema);
+export default mongoose.model<IUser>('User', userSchema);

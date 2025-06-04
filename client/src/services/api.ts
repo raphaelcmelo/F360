@@ -1,5 +1,5 @@
 import axios from "axios";
-import { Group } from "../types/user"; // Import Group type
+import { Group, User } from "../types/user"; // Import updated Group and User types
 
 // Create an axios instance
 export const api = axios.create({
@@ -121,6 +121,10 @@ export const groupApi = {
     const response = await api.post(`/groups/${groupId}/invite`, { email });
     return response.data;
   },
+  updateGroupDisplayName: async (groupId: string, newDisplayName: string) => {
+    const response = await api.put(`/groups/${groupId}/display-name`, { newDisplayName });
+    return response.data;
+  }
 };
 
 // For demonstration purposes, let's keep mock data for other parts if needed

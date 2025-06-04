@@ -1,16 +1,16 @@
 import { Select } from '@mantine/core';
-import { Group } from '../../types/user'; // Import the Group type
+import { Group as BudgetGroupType } from '../../types/user'; // Alias Group to BudgetGroupType
 
 interface GroupSelectorProps {
   value: string;
   onChange: (value: string | null) => void;
-  groups: Group[]; // New prop to receive the user's groups
+  groups: BudgetGroupType[];
 }
 
 export default function GroupSelector({ value, onChange, groups }: GroupSelectorProps) {
-  const data = groups.map(group => ({
+  const data = groups.map((group) => ({
     value: group._id,
-    label: group.nome,
+    label: group.displayName, // Use displayName directly as it's guaranteed to exist now
   }));
 
   return (
@@ -20,8 +20,8 @@ export default function GroupSelector({ value, onChange, groups }: GroupSelector
       value={value}
       onChange={onChange}
       searchable
-      nothingFound="Nenhum grupo encontrado"
-      allowDeselect={false} // A user must always have a group selected
+      nothingFoundMessage="Nenhum grupo encontrado"
+      allowDeselect={false}
       size="md"
       w={250}
     />
