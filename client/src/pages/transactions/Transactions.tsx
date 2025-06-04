@@ -32,7 +32,8 @@ import {
   transactionApi,
   budgetApi,
   plannedBudgetItemApi,
-} from "../../services/api"; // Import budgetApi and plannedBudgetItemApi, remove mockApi
+  groupApi, // Import groupApi
+} from "../../services/api";
 import GroupSelector from "../../components/ui/GroupSelector";
 import { Transaction } from "../../types/transaction";
 import {
@@ -43,6 +44,7 @@ import {
 } from "../../types/budget";
 import CurrencyInput from "../../components/ui/CurrencyInput";
 import { notifications } from "@mantine/notifications";
+import { Group as UserGroup } from "../../types/group"; // Import Group type for user groups
 
 // Define the schema for the transaction form
 const transactionSchema = z.object({
@@ -57,7 +59,8 @@ const transactionSchema = z.object({
 type TransactionFormValues = z.infer<typeof transactionSchema>;
 
 export default function Transactions() {
-  const [selectedGroupId, setSelectedGroupId] = useState<string>("group1"); // TODO: Replace with actual user's active group ID
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null); // Initialize as null
+  const [userGroups, setUserGroups] = useState<UserGroup[]>([]); // State to store user's groups
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -75,7 +78,41 @@ export default function Transactions() {
     },
   });
 
+  // Fetch user groups on component mount
+  useEffect(() => {
+    const fetchUserGroups = async () => {
+      try {
+        const groups = await groupApi.getUserGroups();
+        setUserGroups(groups);
+        if (groups.length > 0) {
+          setSelectedGroupId(groups[0]._id); // Set the first group as default
+        } else {
+          notifications.show({
+            title: "Atenção",
+            message: "Você não possui grupos. Crie um grupo para gerenciar lançamentos.",
+            color: "yellow",
+          });
+          setIsLoading(false); // Stop loading if no groups
+        }
+      } catch (error) {
+        console.error("Error fetching user groups:", error);
+        notifications.show({
+          title: "Erro",
+          message: "Não foi possível carregar seus grupos.",
+          color: "red",
+        });
+        setIsLoading(false);
+      }
+    };
+    fetchUserGroups();
+  }, []);
+
   const fetchTransactionsAndBudget = useCallback(async () => {
+    if (!selectedGroupId) { // Only fetch if a group is selected
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const currentDate = new Date();
@@ -206,13 +243,24 @@ export default function Transactions() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedGroupId]);
+  }, [selectedGroupId]); // Depend on selectedGroupId
 
   useEffect(() => {
-    fetchTransactionsAndBudget();
-  }, [fetchTransactionsAndBudget]);
+    // Only fetch transactions and budget if selectedGroupId is not null
+    if (selectedGroupId) {
+      fetchTransactionsAndBudget();
+    }
+  }, [selectedGroupId, fetchTransactionsAndBudget]); // Re-fetch when selectedGroupId changes
 
   const handleSubmit = async (values: TransactionFormValues) => {
+    if (!selectedGroupId) {
+      notifications.show({
+        title: "Erro",
+        message: "Nenhum grupo selecionado para criar o lançamento.",
+        color: "red",
+      });
+      return;
+    }
     try {
       const newTransaction = await transactionApi.createTransaction(
         selectedGroupId,
@@ -271,13 +319,18 @@ export default function Transactions() {
       transition={{ duration: 0.3 }}
     >
       <Group justify="space-between" mb="xl">
-        <GroupSelector value={selectedGroupId} onChange={setSelectedGroupId} />
+        <GroupSelector
+          value={selectedGroupId || ""} // Pass empty string if null
+          onChange={setSelectedGroupId}
+          groups={userGroups} // Pass the fetched groups to GroupSelector
+        />
 
         <Group>
           <Button
             variant="filled"
             leftSection={<IconPlus size={16} />}
             onClick={() => setIsModalOpen(true)}
+            disabled={!selectedGroupId} // Disable if no group is selected
           >
             Novo Lançamento
           </Button>
@@ -286,6 +339,7 @@ export default function Transactions() {
             variant="light"
             leftSection={<IconRefresh size={16} />}
             onClick={fetchTransactionsAndBudget} // Refresh from backend
+            disabled={!selectedGroupId} // Disable if no group is selected
           >
             Atualizar
           </Button>
@@ -314,6 +368,7 @@ export default function Transactions() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{ flex: 1 }}
+            disabled={!selectedGroupId} // Disable if no group is selected
           />
 
           <Select
@@ -328,6 +383,7 @@ export default function Transactions() {
               { value: "conta", label: "Contas" },
               { value: "poupanca", label: "Poupança" },
             ]}
+            disabled={!selectedGroupId} // Disable if no group is selected
           />
         </Group>
 
@@ -353,10 +409,16 @@ export default function Transactions() {
                   </Center>
                 </Table.Td>
               </Table.Tr>
-            ) : sortedTransactions.length === 0 ? (
+            ) : sortedTransactions.length === 0 && selectedGroupId ? ( // Show "Nenhum lançamento" only if a group is selected
               <Table.Tr>
                 <Table.Td colSpan={5} style={{ textAlign: "center" }}>
                   <Text c="dimmed">Nenhum lançamento encontrado</Text>
+                </Table.Td>
+              </Table.Tr>
+            ) : !selectedGroupId ? ( // Show message if no group is selected
+              <Table.Tr>
+                <Table.Td colSpan={5} style={{ textAlign: "center" }}>
+                  <Text c="dimmed">Selecione ou crie um grupo para visualizar lançamentos.</Text>
                 </Table.Td>
               </Table.Tr>
             ) : (

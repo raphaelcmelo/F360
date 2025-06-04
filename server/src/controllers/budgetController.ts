@@ -4,6 +4,7 @@ import PlannedBudgetItem from "../models/PlannedBudgetItem";
 import Group from "../models/Group";
 import { AuthenticatedRequest, ApiResponse } from "../types";
 import { CreateBudgetSchema } from "../schemas";
+import mongoose from "mongoose"; // Import mongoose to validate ObjectId
 
 // Create a new budget for a specific group
 export const createBudget = async (
@@ -19,6 +20,14 @@ export const createBudget = async (
       return res
         .status(401)
         .json({ success: false, error: "User not authenticated." });
+    }
+
+    // Validate grupoId as a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(grupoId)) {
+      return res.status(400).json({
+        success: false,
+        error: "ID do grupo inválido.",
+      });
     }
 
     // Verify if the user is a member of the specified group
@@ -55,10 +64,6 @@ export const createBudget = async (
       criadoPor: userId,
     });
 
-    // Optionally, link the budget to the group (if not already done via grupoId)
-    // group.orcamentos.push(newBudget._id);
-    // await group.save();
-
     res.status(201).json({
       success: true,
       data: newBudget,
@@ -92,6 +97,14 @@ export const getBudgetById = async (
       return res
         .status(401)
         .json({ success: false, error: "User not authenticated." });
+    }
+
+    // Validate budgetId as a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(budgetId)) {
+      return res.status(400).json({
+        success: false,
+        error: "ID do orçamento inválido.",
+      });
     }
 
     const budget = await Budget.findById(budgetId).lean();
@@ -169,6 +182,15 @@ export const getGroupBudgets = async (
         .json({ success: false, error: "User not authenticated." });
     }
 
+    // Validate groupId as a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(groupId)) {
+      console.log("DEBUG: getGroupBudgets - Invalid groupId, returning 400.");
+      return res.status(400).json({
+        success: false,
+        error: "ID do grupo inválido.",
+      });
+    }
+
     // Verify if the user is a member of the specified group
     const group = await Group.findById(groupId);
     console.log(
@@ -235,6 +257,14 @@ export const deleteBudget = async (
       return res
         .status(401)
         .json({ success: false, error: "User not authenticated." });
+    }
+
+    // Validate budgetId as a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(budgetId)) {
+      return res.status(400).json({
+        success: false,
+        error: "ID do orçamento inválido.",
+      });
     }
 
     const budget = await Budget.findById(budgetId);

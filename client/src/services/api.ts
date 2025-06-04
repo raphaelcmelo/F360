@@ -243,6 +243,3 @@ export const transactionApi = {
     return response.data;
   },
 };
-
-// Remove mockApi as it's no longer needed
-// export const mockApi = { ... }; // This entire object is removed

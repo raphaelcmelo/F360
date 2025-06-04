@@ -1,24 +1,8 @@
-export interface GroupMember {
-  _id: string;
-  nome: string;
-  email: string;
-}
-
-export interface GroupInvite {
-  email: string;
-  token: string;
-  status: 'pendente' | 'aceito' | 'expirado';
-  criadoEm: string;
-}
-
 export interface Group {
   _id: string;
   nome: string;
-  displayName: string; // Add displayName to the Group interface
-  membros: string[] | GroupMember[];
-  convites?: GroupInvite[];
-  criadoPor: string;
-  orcamentos: string[];
+  membros: string[]; // Array of user IDs
+  criadoPor: string; // User ID of the creator
   createdAt: string;
-  updatedAt?: string;
+  updatedAt: string;
 }

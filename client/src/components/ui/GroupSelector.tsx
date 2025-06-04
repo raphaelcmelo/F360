@@ -1,10 +1,11 @@
-import { Select, SelectItem } from "@mantine/core";
-import { Group as BudgetGroupType } from "../../types/group"; // Corrected import path
+import { Select } from "@mantine/core";
+import { IconUsersGroup } from "@tabler/icons-react";
+import { Group as UserGroup } from "../../types/group"; // Import Group type
 
 interface GroupSelectorProps {
-  value: string;
-  onChange: (value: string | null) => void;
-  groups: BudgetGroupType[];
+  value: string | null; // Allow null for initial state
+  onChange: (value: string) => void;
+  groups: UserGroup[]; // New prop for actual groups
 }
 
 export default function GroupSelector({
@@ -12,32 +13,22 @@ export default function GroupSelector({
   onChange,
   groups,
 }: GroupSelectorProps) {
-  // Ensure groups is always an array before mapping
-  const data = (groups || []).map((group) => ({
+  const data = groups.map((group) => ({
     value: group._id,
-    label: group.displayName,
+    label: group.nome,
   }));
 
   return (
     <Select
+      leftSection={<IconUsersGroup size={16} />}
       placeholder="Selecione um grupo"
       data={data}
       value={value}
-      onChange={(val: string | null, option: SelectItem) => {
-        console.log(
-          "GroupSelector onChange received val:",
-          val,
-          "Type:",
-          typeof val
-        );
-        console.log("GroupSelector onChange received option:", option);
-        onChange(val);
-      }}
+      onChange={(val) => onChange(val || "")} // Ensure onChange receives a string
       searchable
-      nothingFoundMessage="Nenhum grupo encontrado"
-      allowDeselect={false}
-      size="md"
-      w={250}
+      nothingFoundMessage="Nenhum grupo encontrado. Crie um novo."
+      clearable={false} // A group should always be selected if available
+      disabled={groups.length === 0} // Disable if no groups are available
     />
   );
 }
