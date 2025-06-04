@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Card,
   Text,
@@ -12,10 +12,10 @@ import {
   Menu,
   Badge,
   Paper,
-} from '@mantine/core';
-import { useForm } from '@mantine/form';
-import { notifications } from '@mantine/notifications';
-import { motion } from 'framer-motion';
+} from "@mantine/core";
+import { useForm } from "@mantine/form";
+import { notifications } from "@mantine/notifications";
+import { motion } from "framer-motion";
 import {
   IconPlus,
   IconDotsVertical,
@@ -23,12 +23,14 @@ import {
   IconEdit,
   IconUsers,
   IconChartBar,
-} from '@tabler/icons-react';
-import { groupApi } from '../../services/api'; // Import groupApi
-import { Group as GroupType } from '../../types/group'; // Use GroupType from group.ts
+} from "@tabler/icons-react";
+import { groupApi } from "../../services/api"; // Import groupApi
+import { Group as GroupType } from "../../types/group"; // Use GroupType from group.ts
+import { useAuth } from "../../contexts/AuthContext"; // Import useAuth
 
 export default function Groups() {
   const navigate = useNavigate();
+  const { checkAuth } = useAuth(); // Get checkAuth from AuthContext
   const [groups, setGroups] = useState<GroupType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -36,10 +38,11 @@ export default function Groups() {
 
   const form = useForm({
     initialValues: {
-      nome: '',
+      nome: "",
     },
     validate: {
-      nome: (value) => (value.length >= 3 ? null : 'Nome deve ter pelo menos 3 caracteres'),
+      nome: (value) =>
+        value.length >= 3 ? null : "Nome deve ter pelo menos 3 caracteres",
     },
   });
 
@@ -52,11 +55,11 @@ export default function Groups() {
       const data = await groupApi.getUserGroups(); // Use real API
       setGroups(data);
     } catch (error) {
-      console.error('Error fetching groups:', error);
+      console.error("Error fetching groups:", error);
       notifications.show({
-        title: 'Erro',
-        message: 'Não foi possível carregar os grupos',
-        color: 'red',
+        title: "Erro",
+        message: "Não foi possível carregar os grupos",
+        color: "red",
       });
     } finally {
       setIsLoading(false);
@@ -66,22 +69,24 @@ export default function Groups() {
   const handleCreateGroup = async (values: typeof form.values) => {
     try {
       await groupApi.createGroup(values.nome); // Use real API
-      
+
       notifications.show({
-        title: 'Sucesso',
-        message: 'Grupo criado com sucesso',
-        color: 'green',
+        title: "Sucesso",
+        message: "Grupo criado com sucesso",
+        color: "green",
       });
-      
+
       setCreateModalOpen(false);
       form.reset();
-      fetchGroups();
+      await fetchGroups(); // Update groups in this component
+      await checkAuth(); // Re-fetch user data in AuthContext to update groups globally
     } catch (error: any) {
-      console.error('Error creating group:', error);
+      console.error("Error creating group:", error);
       notifications.show({
-        title: 'Erro',
-        message: error.response?.data?.error || 'Não foi possível criar o grupo',
-        color: 'red',
+        title: "Erro",
+        message:
+          error.response?.data?.error || "Não foi possível criar o grupo",
+        color: "red",
       });
     }
   };
@@ -90,22 +95,24 @@ export default function Groups() {
     if (!editingGroup) return;
     try {
       await groupApi.updateGroupDisplayName(editingGroup._id, values.nome); // Use real API
-      
+
       notifications.show({
-        title: 'Sucesso',
-        message: 'Nome de exibição do grupo atualizado com sucesso',
-        color: 'green',
+        title: "Sucesso",
+        message: "Nome de exibição do grupo atualizado com sucesso",
+        color: "green",
       });
-      
+
       setEditingGroup(null);
       form.reset();
-      fetchGroups();
+      await fetchGroups(); // Update groups in this component
+      await checkAuth(); // Re-fetch user data in AuthContext to update groups globally
     } catch (error: any) {
-      console.error('Error updating group:', error);
+      console.error("Error updating group:", error);
       notifications.show({
-        title: 'Erro',
-        message: error.response?.data?.error || 'Não foi possível atualizar o grupo',
-        color: 'red',
+        title: "Erro",
+        message:
+          error.response?.data?.error || "Não foi possível atualizar o grupo",
+        color: "red",
       });
     }
   };
@@ -113,20 +120,22 @@ export default function Groups() {
   const handleDeleteGroup = async (groupId: string) => {
     try {
       await groupApi.deleteGroup(groupId); // Use real API
-      
+
       notifications.show({
-        title: 'Sucesso',
-        message: 'Grupo excluído com sucesso',
-        color: 'green',
+        title: "Sucesso",
+        message: "Grupo excluído com sucesso",
+        color: "green",
       });
-      
-      fetchGroups();
+
+      await fetchGroups(); // Update groups in this component
+      await checkAuth(); // Re-fetch user data in AuthContext to update groups globally
     } catch (error: any) {
-      console.error('Error deleting group:', error);
+      console.error("Error deleting group:", error);
       notifications.show({
-        title: 'Erro',
-        message: error.response?.data?.error || 'Não foi possível excluir o grupo',
-        color: 'red',
+        title: "Erro",
+        message:
+          error.response?.data?.error || "Não foi possível excluir o grupo",
+        color: "red",
       });
     }
   };
@@ -169,10 +178,31 @@ export default function Groups() {
             <Paper key={n} p="md" withBorder>
               <Group justify="space-between">
                 <Stack gap="xs">
-                  <div style={{ width: 150, height: 24, background: '#f1f3f5', borderRadius: 4 }} />
-                  <div style={{ width: 100, height: 16, background: '#f1f3f5', borderRadius: 4 }} />
+                  <div
+                    style={{
+                      width: 150,
+                      height: 24,
+                      background: "#f1f3f5",
+                      borderRadius: 4,
+                    }}
+                  />
+                  <div
+                    style={{
+                      width: 100,
+                      height: 16,
+                      background: "#f1f3f5",
+                      borderRadius: 4,
+                    }}
+                  />
                 </Stack>
-                <div style={{ width: 40, height: 40, background: '#f1f3f5', borderRadius: 4 }} />
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    background: "#f1f3f5",
+                    borderRadius: 4,
+                  }}
+                />
               </Group>
             </Paper>
           ))}
@@ -191,7 +221,8 @@ export default function Groups() {
                     <Group justify="space-between" wrap="nowrap">
                       <Stack gap="xs">
                         <Text size="lg" fw={500}>
-                          {group.displayName || group.nome} {/* Use displayName if available, fallback to nome */}
+                          {group.displayName || group.nome}{" "}
+                          {/* Use displayName if available, fallback to nome */}
                         </Text>
                         <Group gap="xs">
                           <Badge
@@ -199,7 +230,10 @@ export default function Groups() {
                             variant="light"
                             color="blue"
                           >
-                            {Array.isArray(group.membros) ? group.membros.length : 0} membros
+                            {Array.isArray(group.membros)
+                              ? group.membros.length
+                              : 0}{" "}
+                            membros
                           </Badge>
                           <Badge
                             leftSection={<IconChartBar size={12} />}
@@ -230,7 +264,9 @@ export default function Groups() {
                               leftSection={<IconEdit size={14} />}
                               onClick={() => {
                                 setEditingGroup(group);
-                                form.setValues({ nome: group.displayName || group.nome }); // Set form value to displayName
+                                form.setValues({
+                                  nome: group.displayName || group.nome,
+                                }); // Set form value to displayName
                               }}
                             >
                               Editar
@@ -284,7 +320,7 @@ export default function Groups() {
               required
               label="Nome do grupo"
               placeholder="Ex: Família Silva"
-              {...form.getInputProps('nome')}
+              {...form.getInputProps("nome")}
             />
             <Button type="submit" fullWidth>
               Criar Grupo
@@ -307,7 +343,7 @@ export default function Groups() {
               required
               label="Nome do grupo"
               placeholder="Ex: Família Silva"
-              {...form.getInputProps('nome')}
+              {...form.getInputProps("nome")}
             />
             <Button type="submit" fullWidth>
               Salvar Alterações
