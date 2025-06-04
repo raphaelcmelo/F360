@@ -54,3 +54,46 @@ export const UpdateGroupDisplayNameSchema = z.object({
     .min(3, "O nome de exibição deve ter pelo menos 3 caracteres.")
     .max(100, "O nome de exibição não pode exceder 100 caracteres."),
 });
+
+export const CreateBudgetSchema = z.object({
+  grupoId: z.string().min(1, "O ID do grupo é obrigatório."),
+  dataInicio: z.string().refine((val) => !isNaN(new Date(val).getTime()), {
+    message: "Formato de data de início inválido.",
+  }),
+  dataFim: z.string().refine((val) => !isNaN(new Date(val).getTime()), {
+    message: "Formato de data de fim inválido.",
+  }),
+}).refine((data) => new Date(data.dataFim) >= new Date(data.dataInicio), {
+  message: "A data de fim não pode ser anterior à data de início.",
+  path: ["dataFim"],
+});
+
+export const CreatePlannedBudgetItemSchema = z.object({
+  budgetId: z.string().min(1, "O ID do orçamento é obrigatório."),
+  groupId: z.string().min(1, "O ID do grupo é obrigatório."),
+  categoryType: z.enum(['renda', 'despesa', 'conta', 'poupanca'], {
+    errorMap: () => ({ message: "Tipo de categoria inválido." }),
+  }),
+  nome: z
+    .string()
+    .min(1, "O nome do item planejado deve ter pelo menos 1 caractere.")
+    .max(200, "O nome do item planejado não pode exceder 200 caracteres."),
+  valorPlanejado: z
+    .number()
+    .min(0, "O valor planejado não pode ser negativo."),
+});
+
+export const UpdatePlannedBudgetItemSchema = z.object({
+  categoryType: z.enum(['renda', 'despesa', 'conta', 'poupanca'], {
+    errorMap: () => ({ message: "Tipo de categoria inválido." }),
+  }).optional(),
+  nome: z
+    .string()
+    .min(1, "O nome do item planejado deve ter pelo menos 1 caractere.")
+    .max(200, "O nome do item planejado não pode exceder 200 caracteres.")
+    .optional(),
+  valorPlanejado: z
+    .number()
+    .min(0, "O valor planejado não pode ser negativo.")
+    .optional(),
+});

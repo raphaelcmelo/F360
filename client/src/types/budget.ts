@@ -1,11 +1,13 @@
-export interface PlannedItem {
+export interface PlannedBudgetItem {
+  _id: string;
+  budgetId: string;
+  groupId: string;
+  categoryType: 'renda' | 'despesa' | 'conta' | 'poupanca';
   nome: string;
   valorPlanejado: number;
-}
-
-export interface BudgetCategory {
-  tipo: 'renda' | 'despesa' | 'conta' | 'poupanca';
-  lancamentosPlanejados: PlannedItem[];
+  criadoPor?: string; // Optional, as it might be populated or not needed on client
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Budget {
@@ -13,7 +15,7 @@ export interface Budget {
   grupoId: string;
   dataInicio: string;
   dataFim: string;
-  categorias: BudgetCategory[];
+  criadoPor?: string; // Optional, as it might be populated or not needed on client
   createdAt?: string;
   updatedAt?: string;
 }
