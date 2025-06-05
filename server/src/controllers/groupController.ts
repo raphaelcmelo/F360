@@ -86,14 +86,22 @@ export const getUserGroups = async (req: CustomRequest, res: Response) => {
         .json({ success: false, error: "Usuário não encontrado." });
     }
 
-    // Filter out any null groupIds that might occur if a group was deleted but not removed from user's groups
-    const userGroups = userWithGroups.grupos.filter(
-      (group) => group.groupId !== null
-    );
+    // Transform the groups to include the user-specific displayName directly on the group object
+    const transformedGroups = userWithGroups.grupos
+      .filter((group) => group.groupId !== null) // Filter out any null groupIds
+      .map((groupAssociation) => ({
+        _id: groupAssociation.groupId._id,
+        nome: groupAssociation.groupId.nome,
+        membros: groupAssociation.groupId.membros,
+        criadoPor: groupAssociation.groupId.criadoPor,
+        createdAt: groupAssociation.groupId.createdAt,
+        updatedAt: groupAssociation.groupId.updatedAt,
+        displayName: groupAssociation.displayName, // Add the user-specific display name
+      }));
 
     res.status(200).json({
       success: true,
-      data: userGroups,
+      data: transformedGroups,
       message: "Grupos do usuário recuperados com sucesso.",
     });
   } catch (error: any) {

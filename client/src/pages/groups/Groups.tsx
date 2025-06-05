@@ -99,9 +99,6 @@ export default function Groups() {
   const handleCreateGroup = async (values: CreateGroupFormValues) => {
     try {
       const newGroup = await groupApi.createGroup(values.nome);
-      // The API returns the GroupType, but the user's groups array stores a different structure
-      // We need to refetch or manually update the user's groups in AuthContext if we want to reflect it immediately
-      // For now, let's refetch all groups to ensure consistency
       notifications.show({
         title: "Sucesso",
         message: `Grupo "${newGroup.nome}" criado com sucesso!`,
@@ -227,8 +224,7 @@ export default function Groups() {
         <Table striped highlightOnHover>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>Nome do Grupo</Table.Th>
-              <Table.Th>Nome de Exibição</Table.Th>
+              <Table.Th>Nome do Grupo</Table.Th> {/* Renamed from "Nome de Exibição" */}
               <Table.Th>Membros</Table.Th>
               <Table.Th>Criado Em</Table.Th>
               <Table.Th style={{ textAlign: "center" }}>Ações</Table.Th>
@@ -237,7 +233,7 @@ export default function Groups() {
           <Table.Tbody>
             {isLoading ? (
               <Table.Tr>
-                <Table.Td colSpan={5}>
+                <Table.Td colSpan={4}> {/* Adjusted colspan */}
                   <Center>
                     <Loader size="sm" />
                     <Text ml="sm" c="dimmed">
@@ -248,15 +244,14 @@ export default function Groups() {
               </Table.Tr>
             ) : groups.length === 0 ? (
               <Table.Tr>
-                <Table.Td colSpan={5} style={{ textAlign: "center" }}>
+                <Table.Td colSpan={4} style={{ textAlign: "center" }}> {/* Adjusted colspan */}
                   <Text c="dimmed">Nenhum grupo encontrado.</Text>
                 </Table.Td>
               </Table.Tr>
             ) : (
               groups.map((group) => (
                 <Table.Tr key={group._id}>
-                  <Table.Td>{group.nome}</Table.Td>
-                  <Table.Td>{group.displayName || "N/A"}</Table.Td>
+                  <Table.Td>{group.displayName || group.nome}</Table.Td> {/* Display displayName or nome */}
                   <Table.Td>{group.membros?.length || 0}</Table.Td>
                   <Table.Td>
                     {new Date(group.createdAt).toLocaleDateString("pt-BR")}

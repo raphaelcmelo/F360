@@ -15,7 +15,7 @@ export default function GroupSelector({
 }: GroupSelectorProps) {
   const data = groups.map((group) => ({
     value: group._id,
-    label: group.nome,
+    label: group.displayName || group.nome, // Use displayName if available, otherwise nome
   }));
 
   return (

@@ -27,7 +27,7 @@ import {
 import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { budgetApi, plannedBudgetItemApi } from "../../services/api";
+import { budgetApi, plannedBudgetItemApi, groupApi } from "../../services/api"; // Import groupApi
 import GroupSelector from "../../components/ui/GroupSelector";
 import { Budget as BudgetType, PlannedBudgetItem } from "../../types/budget";
 import { useAuth } from "../../contexts/AuthContext";
@@ -131,35 +131,36 @@ export default function Budget() {
     },
   });
 
-  // Effect to set groups and initial selectedGroupId when user data is available
-  useEffect(() => {
-    if (!isAuthLoading && user?.grupos) {
-      const mappedGroups: BudgetGroupType[] = user.grupos.map((g) => ({
-        _id: g.groupId._id,
-        nome: g.groupId.nome,
-        displayName: g.displayName,
-        membros: g.groupId.membros,
-        criadoPor: g.groupId.criadoPor,
-        orcamentos: g.groupId.orcamentos,
-        createdAt: g.groupId.createdAt,
-        updatedAt: g.groupId.updatedAt,
-      }));
-      setGroups(mappedGroups);
-      if (mappedGroups.length > 0) {
-        const currentIdIsValid = mappedGroups.some(
+  // Fetch user groups on component mount
+  const fetchUserGroups = useCallback(async () => {
+    setIsBudgetLoading(true);
+    try {
+      const groupsData: BudgetGroupType[] = await groupApi.getUserGroups();
+      setGroups(groupsData);
+      if (groupsData.length > 0) {
+        const currentIdIsValid = groupsData.some(
           (g) => g._id === selectedGroupId
         );
         if (!selectedGroupId || !currentIdIsValid) {
-          setSelectedGroupId(mappedGroups[0]._id);
+          setSelectedGroupId(groupsData[0]._id);
         }
       } else {
         setSelectedGroupId("");
       }
-    } else if (!isAuthLoading && !user?.grupos) {
+    } catch (error) {
+      console.error("Error fetching user groups:", error);
       setGroups([]);
       setSelectedGroupId("");
+    } finally {
+      setIsBudgetLoading(false);
     }
-  }, [user, isAuthLoading, selectedGroupId]);
+  }, [selectedGroupId]);
+
+  useEffect(() => {
+    if (!isAuthLoading) {
+      fetchUserGroups();
+    }
+  }, [isAuthLoading, fetchUserGroups]);
 
   const fetchBudget = useCallback(async () => {
     if (!selectedGroupId || !user?._id) {
