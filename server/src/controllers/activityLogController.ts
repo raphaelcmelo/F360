@@ -24,7 +24,6 @@ export const createActivityLog = async (
       description,
       details,
     });
-    console.log("Activity Log created:", newLog.description);
   } catch (error) {
     console.error("Error creating activity log:", error);
     // In a real application, you might want to log this error more robustly

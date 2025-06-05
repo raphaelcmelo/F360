@@ -147,7 +147,6 @@ export default function Transactions() {
 
   const fetchTransactionsAndBudget = useCallback(async () => {
     if (!selectedGroupId) {
-      // Only fetch if a group is selected
       setIsLoading(false);
       return;
     }
@@ -338,7 +337,9 @@ export default function Transactions() {
     openEditModal();
   };
 
-  const handleUpdateTransaction = async (values: UpdateTransactionFormValues) => {
+  const handleUpdateTransaction = async (
+    values: UpdateTransactionFormValues
+  ) => {
     if (!selectedTransaction) return;
 
     try {
@@ -824,7 +825,8 @@ export default function Transactions() {
           <b>{selectedTransaction?.tipo}</b>" (R${" "}
           {selectedTransaction?.valor.toLocaleString("pt-BR", {
             minimumFractionDigits: 2,
-          })})? Esta ação não pode ser desfeita.
+          })}
+          )? Esta ação não pode ser desfeita.
         </Text>
         <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={closeDeleteModal}>

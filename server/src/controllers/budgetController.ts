@@ -140,7 +140,6 @@ export const getBudgetById = async (
       { renda: 0, despesa: 0, conta: 0, poupanca: 0 }
     );
 
-    // Add aggregated totals to the budget object
     const budgetWithTotals = {
       ...budget,
       totalRendaPlanejado: aggregatedTotals.renda,
@@ -171,12 +170,6 @@ export const getGroupBudgets = async (
     const { groupId } = req.params;
     const userId = req.user?._id;
 
-    console.log(
-      "DEBUG: getGroupBudgets - userId:",
-      userId ? userId.toString() : "N/A"
-    );
-    console.log("DEBUG: getGroupBudgets - groupId:", groupId);
-
     if (!userId) {
       return res
         .status(401)
@@ -202,18 +195,10 @@ export const getGroupBudgets = async (
       });
     }
 
-    console.log("DEBUG: getGroupBudgets - Group found:", group.nome);
-    console.log("DEBUG: getGroupBudgets - Group members:", group.membros);
-
     const isMember = group.membros.some((member) => {
       const isCurrentMember = member.userId.equals(userId);
-      console.log(
-        `DEBUG: Checking member ${member.userId} against user ${userId}: ${isCurrentMember}`
-      );
       return isCurrentMember;
     });
-
-    console.log("DEBUG: getGroupBudgets - isMember:", isMember);
 
     if (!isMember) {
       return res.status(403).json({

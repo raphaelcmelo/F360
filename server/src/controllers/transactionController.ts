@@ -37,8 +37,14 @@ export const createTransaction = async (req: CustomRequest, res: Response) => {
       req.user.id,
       req.user.name,
       "transaction_created",
-      `Lançamento de ${newTransaction.categoria} "${newTransaction.tipo}" no valor de R$ ${newTransaction.valor.toFixed(2)} criado.`,
-      { transactionId: newTransaction._id, category: newTransaction.categoria, value: newTransaction.valor }
+      `Lançamento de ${newTransaction.categoria} "${
+        newTransaction.tipo
+      }" no valor de R$ ${newTransaction.valor.toFixed(2)} criado.`,
+      {
+        transactionId: newTransaction._id,
+        category: newTransaction.categoria,
+        value: newTransaction.valor,
+      }
     );
 
     res.status(201).json({
@@ -97,6 +103,12 @@ export const getTransactionsByGroup = async (
       data: -1,
     });
 
+    transactions.slice(0, 5).forEach((t, i) => {
+      console.log(
+        `  [${i}] Category: ${t.categoria}, Type: ${t.tipo}, Valor: ${t.valor}`
+      );
+    });
+
     res.status(200).json({
       success: true,
       data: transactions,
@@ -128,10 +140,7 @@ export const getTransactionById = async (req: CustomRequest, res: Response) => {
     }
 
     // Optional: Add authorization check if the user belongs to the group
-    if (
-      !req.user ||
-      !transaction.grupoId.equals(req.user.activeGroup || "")
-    ) {
+    if (!req.user || !transaction.grupoId.equals(req.user.activeGroup || "")) {
       // This check assumes req.user.activeGroup is set, or you'd check group membership
       // For simplicity, we'll just return the transaction if found.
       // A more robust check would involve verifying the user is a member of `transaction.grupoId`.
@@ -180,7 +189,10 @@ export const updateTransaction = async (req: CustomRequest, res: Response) => {
 
     const updatedTransaction = await Transaction.findByIdAndUpdate(
       id,
-      { ...validatedData, data: validatedData.data ? new Date(validatedData.data) : undefined },
+      {
+        ...validatedData,
+        data: validatedData.data ? new Date(validatedData.data) : undefined,
+      },
       { new: true, runValidators: true }
     );
 
@@ -191,7 +203,11 @@ export const updateTransaction = async (req: CustomRequest, res: Response) => {
         req.user.id,
         req.user.name,
         "transaction_updated",
-        `Lançamento "${oldTransaction.tipo}" de R$ ${oldTransaction.valor.toFixed(2)} para R$ ${updatedTransaction.valor.toFixed(2)} atualizado.`,
+        `Lançamento "${
+          oldTransaction.tipo
+        }" de R$ ${oldTransaction.valor.toFixed(
+          2
+        )} para R$ ${updatedTransaction.valor.toFixed(2)} atualizado.`,
         {
           transactionId: updatedTransaction._id,
           oldValue: oldTransaction.valor,
@@ -255,8 +271,14 @@ export const deleteTransaction = async (req: CustomRequest, res: Response) => {
       req.user.id,
       req.user.name,
       "transaction_deleted",
-      `Lançamento "${transaction.tipo}" de R$ ${transaction.valor.toFixed(2)} excluído.`,
-      { transactionId: transaction._id, category: transaction.categoria, value: transaction.valor }
+      `Lançamento "${transaction.tipo}" de R$ ${transaction.valor.toFixed(
+        2
+      )} excluído.`,
+      {
+        transactionId: transaction._id,
+        category: transaction.categoria,
+        value: transaction.valor,
+      }
     );
 
     res.status(200).json({

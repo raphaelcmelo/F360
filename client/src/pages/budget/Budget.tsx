@@ -181,6 +181,7 @@ export default function Budget() {
       let currentBudget: BudgetType | null = null;
 
       const groupBudgets = await budgetApi.getGroupBudgets(selectedGroupId);
+
       currentBudget =
         groupBudgets.find(
           (b) =>
@@ -205,7 +206,6 @@ export default function Budget() {
         await plannedBudgetItemApi.getPlannedBudgetItemsForBudget(
           currentBudget._id
         );
-
       // Transform flat plannedItems into categorized structure for UI, including _id and categoryType
       const transformedBudget: UIBudget = {
         _id: currentBudget._id,
