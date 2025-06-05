@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Paper,
   Title,
@@ -11,8 +11,8 @@ import {
   ThemeIcon,
   Loader,
   Center,
-} from '@mantine/core';
-import { motion } from 'framer-motion';
+} from "@mantine/core";
+import { motion } from "framer-motion";
 import {
   IconArrowLeft,
   IconWallet,
@@ -24,10 +24,10 @@ import {
   IconUserPlus,
   IconUserMinus,
   IconBuildingBank,
-} from '@tabler/icons-react';
-import { useAuth } from '../../context/AuthContext';
-import { activityLogApi } from '../../services/api';
-import { ActivityLog } from '../../types/activityLog';
+} from "@tabler/icons-react";
+import { useAuth } from "../../contexts/AuthContext";
+import { activityLogApi } from "../../services/api";
+import { ActivityLog } from "../../types/activityLog";
 
 export default function History() {
   const navigate = useNavigate();
@@ -40,17 +40,19 @@ export default function History() {
     const fetchHistory = async () => {
       if (!user || !user.activeGroup) {
         setLoading(false);
-        setError('Nenhum grupo ativo selecionado.');
+        setError("Nenhum grupo ativo selecionado.");
         return;
       }
 
       try {
         setLoading(true);
-        const data = await activityLogApi.getActivitiesByGroup(user.activeGroup);
+        const data = await activityLogApi.getActivitiesByGroup(
+          user.activeGroup
+        );
         setHistoryEntries(data);
       } catch (err) {
-        console.error('Failed to fetch activity history:', err);
-        setError('Falha ao carregar o histórico de atividades.');
+        console.error("Failed to fetch activity history:", err);
+        setError("Falha ao carregar o histórico de atividades.");
       } finally {
         setLoading(false);
       }
@@ -61,27 +63,27 @@ export default function History() {
 
   const getActivityIcon = (actionType: string) => {
     switch (actionType) {
-      case 'transaction_created':
+      case "transaction_created":
         return <IconPlus size={18} />;
-      case 'transaction_updated':
+      case "transaction_updated":
         return <IconEdit size={18} />;
-      case 'transaction_deleted':
+      case "transaction_deleted":
         return <IconTrash size={18} />;
-      case 'budget_item_created':
+      case "budget_item_created":
         return <IconPlus size={18} />;
-      case 'budget_item_updated':
+      case "budget_item_updated":
         return <IconEdit size={18} />;
-      case 'budget_item_deleted':
+      case "budget_item_deleted":
         return <IconTrash size={18} />;
-      case 'member_invited':
+      case "member_invited":
         return <IconUserPlus size={18} />;
-      case 'member_removed':
+      case "member_removed":
         return <IconUserMinus size={18} />;
-      case 'group_created':
+      case "group_created":
         return <IconBuildingBank size={18} />;
-      case 'group_updated':
+      case "group_updated":
         return <IconEdit size={18} />;
-      case 'group_deleted':
+      case "group_deleted":
         return <IconTrash size={18} />;
       default:
         return <IconWallet size={18} />;
@@ -89,18 +91,21 @@ export default function History() {
   };
 
   const getActivityColor = (actionType: string) => {
-    if (actionType.includes('created')) return 'green';
-    if (actionType.includes('updated')) return 'blue';
-    if (actionType.includes('deleted')) return 'red';
-    if (actionType.includes('invited')) return 'teal';
-    if (actionType.includes('removed')) return 'orange';
-    if (actionType.includes('group')) return 'violet';
-    return 'gray';
+    if (actionType.includes("created")) return "green";
+    if (actionType.includes("updated")) return "blue";
+    if (actionType.includes("deleted")) return "red";
+    if (actionType.includes("invited")) return "teal";
+    if (actionType.includes("removed")) return "orange";
+    if (actionType.includes("group")) return "violet";
+    return "gray";
   };
 
   const renderHistoryItem = (item: ActivityLog) => {
-    const formattedDate = new Date(item.createdAt).toLocaleDateString('pt-BR');
-    const formattedTime = new Date(item.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const formattedDate = new Date(item.createdAt).toLocaleDateString("pt-BR");
+    const formattedTime = new Date(item.createdAt).toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
     return (
       <Card key={item._id} withBorder mb="sm">

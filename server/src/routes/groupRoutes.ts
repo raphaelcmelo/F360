@@ -7,12 +7,12 @@ import {
   deleteGroup,
   removeMember,
 } from "../controllers/groupController";
-import { protect } from "../middleware/authMiddleware";
+import { authenticateToken } from "../middleware/auth";
 
 const router = Router();
 
 // Protect all group routes
-router.use(protect);
+router.use(authenticateToken);
 
 router.post("/", createGroup);
 router.get("/", getUserGroups);
