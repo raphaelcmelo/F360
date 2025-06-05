@@ -594,7 +594,13 @@ export default function Transactions() {
                     <Text
                       fw={500}
                       c={
-                        transaction.categoria === "renda" ? "green" : undefined
+                        transaction.categoria === "renda"
+                          ? "green"
+                          : transaction.categoria === "despesa"
+                          ? "red"
+                          : transaction.categoria === "conta"
+                          ? "orange"
+                          : "blue"
                       }
                     >
                       R${" "}

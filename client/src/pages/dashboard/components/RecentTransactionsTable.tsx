@@ -1,5 +1,5 @@
-import { Table, Text, Badge, Skeleton, Group } from '@mantine/core';
-import { Transaction } from '../../../types/transaction';
+import { Table, Text, Badge, Skeleton, Group } from "@mantine/core";
+import { Transaction } from "../../../types/transaction";
 
 interface RecentTransactionsTableProps {
   transactions: Transaction[];
@@ -13,45 +13,43 @@ export default function RecentTransactionsTable({
   // Helper to format date
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR');
+    return date.toLocaleDateString("pt-BR");
   };
-  
+
   // Helper to get category badge color
   const getCategoryColor = (category: string) => {
     switch (category) {
-      case 'renda':
-        return 'green';
-      case 'despesa':
-        return 'red';
-      case 'conta':
-        return 'orange';
-      case 'poupanca':
-        return 'blue';
+      case "renda":
+        return "green";
+      case "despesa":
+        return "red";
+      case "conta":
+        return "orange";
+      case "poupanca":
+        return "blue";
       default:
-        return 'gray';
+        return "gray";
     }
   };
-  
+
   // Helper to get category label
   const getCategoryLabel = (category: string) => {
     switch (category) {
-      case 'renda':
-        return 'Receita';
-      case 'despesa':
-        return 'Despesa';
-      case 'conta':
-        return 'Conta';
-      case 'poupanca':
-        return 'Poupança';
+      case "renda":
+        return "Receita";
+      case "despesa":
+        return "Despesa";
+      case "conta":
+        return "Conta";
+      case "poupanca":
+        return "Poupança";
       default:
         return category;
     }
   };
 
   if (isLoading) {
-    return (
-      <Skeleton height={300} />
-    );
+    return <Skeleton height={300} />;
   }
 
   // Sort transactions by date (newest first)
@@ -66,7 +64,7 @@ export default function RecentTransactionsTable({
           <Table.Th>Data</Table.Th>
           <Table.Th>Categoria</Table.Th>
           <Table.Th>Descrição</Table.Th>
-          <Table.Th style={{ textAlign: 'right' }}>Valor</Table.Th>
+          <Table.Th style={{ textAlign: "right" }}>Valor</Table.Th>
         </Table.Tr>
       </Table.Thead>
       <Table.Tbody>
@@ -80,16 +78,19 @@ export default function RecentTransactionsTable({
                 </Badge>
               </Table.Td>
               <Table.Td>{transaction.tipo}</Table.Td>
-              <Table.Td style={{ textAlign: 'right' }}>
-                <Text fw={500} c={transaction.categoria === 'renda' ? 'green' : undefined}>
-                  R$ {transaction.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              <Table.Td style={{ textAlign: "right" }}>
+                <Text fw={500} c={getCategoryColor(transaction.categoria)}>
+                  R${" "}
+                  {transaction.valor.toLocaleString("pt-BR", {
+                    minimumFractionDigits: 2,
+                  })}
                 </Text>
               </Table.Td>
             </Table.Tr>
           ))
         ) : (
           <Table.Tr>
-            <Table.Td colSpan={4} style={{ textAlign: 'center' }}>
+            <Table.Td colSpan={4} style={{ textAlign: "center" }}>
               <Text c="dimmed">Nenhuma transação encontrada</Text>
             </Table.Td>
           </Table.Tr>
