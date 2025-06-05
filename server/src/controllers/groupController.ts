@@ -11,7 +11,10 @@ import {
 import { z } from "zod";
 import mongoose from "mongoose";
 import crypto from "crypto"; // For generating tokens
-import { sendGroupInvitationEmail, sendRegistrationInvitationEmail } from "../utils/emailService"; // Import new email services
+import {
+  sendGroupInvitationEmail,
+  sendRegistrationInvitationEmail,
+} from "../utils/emailService"; // Import new email services
 
 // @desc    Create a new group
 // @route   POST /api/groups
@@ -119,7 +122,10 @@ export const getUserGroups = async (req: CustomRequest, res: Response) => {
 // @desc    Invite a member to a group
 // @route   POST /api/groups/:groupId/invite
 // @access  Private
-export const inviteMemberToGroup = async (req: CustomRequest, res: Response) => {
+export const inviteMemberToGroup = async (
+  req: CustomRequest,
+  res: Response
+) => {
   try {
     const { groupId } = req.params;
     const validatedData = InviteMemberSchema.parse(req.body);
@@ -131,7 +137,8 @@ export const inviteMemberToGroup = async (req: CustomRequest, res: Response) => 
         .json({ success: false, error: "Usuário não autenticado." });
     }
 
-    const group = await Group.findById(groupId);
+    // Populate the 'userId' field within the 'membros' array
+    const group = await Group.findById(groupId).populate("membros.userId");
 
     if (!group) {
       return res
@@ -139,12 +146,25 @@ export const inviteMemberToGroup = async (req: CustomRequest, res: Response) => 
         .json({ success: false, error: "Grupo não encontrado." });
     }
 
+    console.log("Inviting user ID:", req.user.id);
+    console.log("Group members:", group.membros);
+
     // Check if the inviting user is an admin of the group
-    const inviterIsAdmin = group.membros.some(
-      (member) =>
-        member.userId.equals(req.user!.id) &&
-        (member.role === "admin" || member.role === "owner")
-    );
+    const inviterIsAdmin = group.membros.some((member) => {
+      console.log("Checking member:", member);
+      console.log("Member userId:", member?.userId);
+      console.log("Member role:", member?.role);
+      // Now member.userId should be populated, so we can directly compare IDs
+      const isMatch =
+        member && member.userId && member.userId.equals(req.user!.id);
+      const hasRole =
+        member && (member.role === "admin" || member.role === "owner");
+      console.log("Is user ID match?", isMatch);
+      console.log("Has admin/owner role?", hasRole);
+      return isMatch && hasRole;
+    });
+
+    console.log("Inviter is admin:", inviterIsAdmin);
 
     if (!inviterIsAdmin) {
       return res.status(403).json({
@@ -185,7 +205,12 @@ export const inviteMemberToGroup = async (req: CustomRequest, res: Response) => 
         expiresAt,
       });
 
-      await sendGroupInvitationEmail(email, group.nome, group._id.toString(), invitationToken);
+      await sendGroupInvitationEmail(
+        email,
+        group.nome,
+        group._id.toString(),
+        invitationToken
+      );
 
       res.status(200).json({
         success: true,
@@ -202,7 +227,12 @@ export const inviteMemberToGroup = async (req: CustomRequest, res: Response) => 
         expiresAt,
       });
 
-      await sendRegistrationInvitationEmail(email, group.nome, group._id.toString(), invitationToken);
+      await sendRegistrationInvitationEmail(
+        email,
+        group.nome,
+        group._id.toString(),
+        invitationToken
+      );
 
       res.status(200).json({
         success: true,
@@ -252,9 +282,7 @@ export const updateGroupDisplayName = async (
         .json({ success: false, error: "Usuário não encontrado." });
     }
 
-    const groupIndex = user.grupos.findIndex((g) =>
-      g.groupId.equals(groupId)
-    );
+    const groupIndex = user.grupos.findIndex((g) => g.groupId.equals(groupId));
 
     if (groupIndex === -1) {
       return res.status(404).json({

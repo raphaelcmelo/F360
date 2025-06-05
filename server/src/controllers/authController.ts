@@ -45,7 +45,10 @@ export const register = async (
     const { groupId, token } = req.body; // Expect groupId and token from query/body if it's an invitation
 
     if (groupId && token) {
-      const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+      const hashedToken = crypto
+        .createHash("sha256")
+        .update(token)
+        .digest("hex");
 
       const invitationTokenDoc = await Token.findOne({
         token: hashedToken,
@@ -72,12 +75,6 @@ export const register = async (
             // Add group to user's groups
             user.grupos.push({ groupId: group._id, displayName: group.nome });
             await user.save();
-
-            notifications.show({
-              title: "Sucesso",
-              message: `Você foi adicionado ao grupo "${group.nome}"!`,
-              color: "green",
-            });
           }
         }
         await Token.deleteOne({ _id: invitationTokenDoc._id }); // Invalidate the used token
