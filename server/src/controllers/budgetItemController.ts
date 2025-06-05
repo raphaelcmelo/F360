@@ -33,24 +33,22 @@ export const createPlannedBudgetItem = async (
         .json({ success: false, error: "Orçamento não encontrado." });
     }
     if (!budget.grupoId.equals(groupId)) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "O orçamento não pertence ao grupo especificado.",
-        });
+      return res.status(400).json({
+        success: false,
+        error: "O orçamento não pertence ao grupo especificado.",
+      });
     }
 
     // Verify if the user is a member of the group associated with this budget
     const group = await Group.findById(groupId);
-    if (!group || !group.membros.includes(userId)) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          error:
-            "Você não tem permissão para adicionar itens a este orçamento.",
-        });
+    if (
+      !group ||
+      !group.membros.some((member) => member.userId.equals(userId))
+    ) {
+      return res.status(403).json({
+        success: false,
+        error: "Você não tem permissão para adicionar itens a este orçamento.",
+      });
     }
 
     // Check for existing planned budget item with the same categoryType and nome for this budget
@@ -84,21 +82,19 @@ export const createPlannedBudgetItem = async (
     });
   } catch (error: any) {
     if (error.name === "ZodError") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "Validation error",
-          details: error.errors,
-        });
+      return res.status(400).json({
+        success: false,
+        error: "Validation error",
+        details: error.errors,
+      });
     }
     console.error("Error creating planned budget item:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Server error creating planned budget item.",
-      });
+    res.status(500).json({
+      success: false,
+      error: "Server error creating planned budget item.",
+      details: error.message, // Adicionado para depuração
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined, // Adicionado para depuração
+    });
   }
 };
 
@@ -126,14 +122,14 @@ export const getPlannedBudgetItemsForBudget = async (
     }
 
     const group = await Group.findById(budget.grupoId);
-    if (!group || !group.membros.includes(userId)) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          error:
-            "Você não tem permissão para acessar os itens deste orçamento.",
-        });
+    if (
+      !group ||
+      !group.membros.some((member) => member.userId.equals(userId))
+    ) {
+      return res.status(403).json({
+        success: false,
+        error: "Você não tem permissão para acessar os itens deste orçamento.",
+      });
     }
 
     const plannedItems = await PlannedBudgetItem.find({ budgetId })
@@ -147,12 +143,12 @@ export const getPlannedBudgetItemsForBudget = async (
     });
   } catch (error: any) {
     console.error("Error fetching planned budget items:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Server error fetching planned budget items.",
-      });
+    res.status(500).json({
+      success: false,
+      error: "Server error fetching planned budget items.",
+      details: error.message, // Adicionado para depuração
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined, // Adicionado para depuração
+    });
   }
 };
 
@@ -175,12 +171,10 @@ export const updatePlannedBudgetItem = async (
     const item = await PlannedBudgetItem.findById(itemId);
 
     if (!item) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          error: "Item de orçamento planejado não encontrado.",
-        });
+      return res.status(404).json({
+        success: false,
+        error: "Item de orçamento planejado não encontrado.",
+      });
     }
 
     // Verify if the user has access to the group associated with this item's budget
@@ -191,13 +185,14 @@ export const updatePlannedBudgetItem = async (
         .json({ success: false, error: "Orçamento associado não encontrado." });
     }
     const group = await Group.findById(budget.grupoId);
-    if (!group || !group.membros.includes(userId)) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          error: "Você não tem permissão para atualizar este item.",
-        });
+    if (
+      !group ||
+      !group.membros.some((member) => member.userId.equals(userId))
+    ) {
+      return res.status(403).json({
+        success: false,
+        error: "Você não tem permissão para atualizar este item.",
+      });
     }
 
     // If nome or categoryType are being updated, check for duplicates
@@ -240,21 +235,19 @@ export const updatePlannedBudgetItem = async (
     });
   } catch (error: any) {
     if (error.name === "ZodError") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "Validation error",
-          details: error.errors,
-        });
+      return res.status(400).json({
+        success: false,
+        error: "Validation error",
+        details: error.errors,
+      });
     }
     console.error("Error updating planned budget item:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Server error updating planned budget item.",
-      });
+    res.status(500).json({
+      success: false,
+      error: "Server error updating planned budget item.",
+      details: error.message, // Adicionado para depuração
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined, // Adicionado para depuração
+    });
   }
 };
 
@@ -276,12 +269,10 @@ export const deletePlannedBudgetItem = async (
     const item = await PlannedBudgetItem.findById(itemId);
 
     if (!item) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          error: "Item de orçamento planejado não encontrado.",
-        });
+      return res.status(404).json({
+        success: false,
+        error: "Item de orçamento planejado não encontrado.",
+      });
     }
 
     // Verify if the user has access to the group associated with this item's budget
@@ -292,13 +283,14 @@ export const deletePlannedBudgetItem = async (
         .json({ success: false, error: "Orçamento associado não encontrado." });
     }
     const group = await Group.findById(budget.grupoId);
-    if (!group || !group.membros.includes(userId)) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          error: "Você não tem permissão para deletar este item.",
-        });
+    if (
+      !group ||
+      !group.membros.some((member) => member.userId.equals(userId))
+    ) {
+      return res.status(403).json({
+        success: false,
+        error: "Você não tem permissão para deletar este item.",
+      });
     }
 
     // Only the creator of the item or the budget creator can delete it (or group admin)
@@ -312,11 +304,11 @@ export const deletePlannedBudgetItem = async (
     });
   } catch (error: any) {
     console.error("Error deleting planned budget item:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Server error deleting planned budget item.",
-      });
+    res.status(500).json({
+      success: false,
+      error: "Server error deleting planned budget item.",
+      details: error.message, // Adicionado para depuração
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined, // Adicionado para depuração
+    });
   }
 };

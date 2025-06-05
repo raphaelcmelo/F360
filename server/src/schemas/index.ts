@@ -18,7 +18,9 @@ export const ForgotPasswordSchema = z.object({
 
 export const ResetPasswordSchema = z
   .object({
-    password: z.string().min(6, "A nova senha deve ter pelo menos 6 caracteres"),
+    password: z
+      .string()
+      .min(6, "A nova senha deve ter pelo menos 6 caracteres"),
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -43,4 +45,45 @@ export const UpdateGroupDisplayNameSchema = z.object({
 export const AcceptGroupInvitationSchema = z.object({
   groupId: z.string().min(1, "ID do grupo é obrigatório"),
   token: z.string().min(1, "Token é obrigatório"),
+});
+
+// Budget Schemas
+export const CreateBudgetSchema = z.object({
+  grupoId: z.string().min(1, "ID do grupo é obrigatório"),
+  dataInicio: z.string().datetime("Data de início inválida"), // Assuming ISO string format
+  dataFim: z.string().datetime("Data de fim inválida"), // Assuming ISO string format
+});
+
+// Planned BudgetItem Schemas
+export const CreatePlannedBudgetItemSchema = z.object({
+  budgetId: z.string().min(1, "ID do orçamento é obrigatório"),
+  groupId: z.string().min(1, "ID do grupo é obrigatório"),
+  categoryType: z.enum(["renda", "despesa", "conta", "poupanca"], {
+    required_error: "Tipo de categoria é obrigatório",
+  }),
+  nome: z
+    .string()
+    .min(1, "Nome do item é obrigatório")
+    .max(200, "Nome muito longo"),
+  valorPlanejado: z.number().min(0, "Valor planejado deve ser não negativo"),
+});
+
+export const UpdatePlannedBudgetItemSchema = z.object({
+  categoryType: z
+    .enum(["renda", "despesa", "conta", "poupanca"], {
+      required_error: "Tipo de categoria é obrigatório",
+    })
+    .optional(),
+  nome: z
+    .string()
+    .min(1, "Nome do item é obrigatório")
+    .max(200, "Nome muito longo")
+    .optional(),
+  valorPlanejado: z
+    .number()
+    .min(0, "Valor planejado deve ser não negativo")
+    .optional(),
+});
+export const DeletePlannedBudgetItemSchema = z.object({
+  itemId: z.string().min(1, "ID do item é obrigatório"),
 });

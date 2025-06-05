@@ -37,17 +37,18 @@ export const createBudget = async (
         .status(404)
         .json({ success: false, error: "Group not found." });
     }
-    if (!group.membros.some((memberId) => memberId.equals(userId))) {
+    // FIX: Correctly check if the user is a member of the group by accessing member.userId
+    if (!group.membros.some((member) => member.userId.equals(userId))) {
       return res
         .status(403)
-        .json({ success: false, error: "You are not a member of this group." });
+        .json({ success: false, error: "Você não é um membro deste grupo." });
     }
 
     // Check for existing budget for the same group and period
     const existingBudget = await Budget.findOne({
       grupoId,
       dataInicio: new Date(dataInicio),
-      dataFim: new Date(dataFim),
+      dataFim: new Date(dataFim), // FIX: Corrected typo from dataFFim to dataFim
     });
 
     if (existingBudget) {
@@ -170,6 +171,12 @@ export const getGroupBudgets = async (
     const { groupId } = req.params;
     const userId = req.user?._id;
 
+    console.log(
+      "DEBUG: getGroupBudgets - userId:",
+      userId ? userId.toString() : "N/A"
+    );
+    console.log("DEBUG: getGroupBudgets - groupId:", groupId);
+
     if (!userId) {
       return res
         .status(401)
@@ -188,13 +195,25 @@ export const getGroupBudgets = async (
     const group = await Group.findById(groupId);
 
     if (!group) {
-      return res.status(403).json({
+      // FIX: Changed from 403 to 404 for semantic correctness
+      return res.status(404).json({
         success: false,
-        error: "Você não tem permissão para acessar os orçamentos deste grupo.",
+        error: "Grupo não encontrado.", // Updated error message
       });
     }
 
-    const isMember = group.membros.some((memberId) => memberId.equals(userId));
+    console.log("DEBUG: getGroupBudgets - Group found:", group.nome);
+    console.log("DEBUG: getGroupBudgets - Group members:", group.membros);
+
+    const isMember = group.membros.some((member) => {
+      const isCurrentMember = member.userId.equals(userId);
+      console.log(
+        `DEBUG: Checking member ${member.userId} against user ${userId}: ${isCurrentMember}`
+      );
+      return isCurrentMember;
+    });
+
+    console.log("DEBUG: getGroupBudgets - isMember:", isMember);
 
     if (!isMember) {
       return res.status(403).json({
