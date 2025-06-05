@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Paper,
@@ -8,6 +9,8 @@ import {
   ActionIcon,
   Card,
   ThemeIcon,
+  Loader,
+  Center,
 } from '@mantine/core';
 import { motion } from 'framer-motion';
 import {
@@ -15,155 +18,115 @@ import {
   IconWallet,
   IconChartBar,
   IconUsers,
+  IconPlus,
+  IconEdit,
+  IconTrash,
+  IconUserPlus,
+  IconUserMinus,
+  IconBuildingBank,
 } from '@tabler/icons-react';
+import { useAuth } from '../../context/AuthContext';
+import { activityLogApi } from '../../services/api';
+import { ActivityLog } from '../../types/activityLog';
 
 export default function History() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [historyEntries, setHistoryEntries] = useState<ActivityLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Dummy data for history entries
-  const historyEntries = [
-    {
-      id: 'h1',
-      type: 'transaction',
-      description: 'Pagamento de aluguel',
-      amount: 1500.0,
-      date: '2023-10-26',
-      category: 'Moradia',
-    },
-    {
-      id: 'h2',
-      type: 'budget_change',
-      description: 'Orçamento de alimentação ajustado',
-      oldValue: 500,
-      newValue: 600,
-      date: '2023-10-25',
-    },
-    {
-      id: 'h3',
-      type: 'transaction',
-      description: 'Compra de supermercado',
-      amount: 230.75,
-      date: '2023-10-24',
-      category: 'Alimentação',
-    },
-    {
-      id: 'h4',
-      type: 'transaction',
-      description: 'Assinatura de streaming',
-      amount: 39.9,
-      date: '2023-10-23',
-      category: 'Entretenimento',
-    },
-    {
-      id: 'h5',
-      type: 'group_activity',
-      description: 'Novo membro adicionado ao "Grupo Viagem"',
-      date: '2023-10-22',
-    },
-    {
-      id: 'h6',
-      type: 'transaction',
-      description: 'Manutenção do carro',
-      amount: 450.0,
-      date: '2023-10-21',
-      category: 'Transporte',
-    },
-    {
-      id: 'h7',
-      type: 'budget_change',
-      description: 'Orçamento de transporte ajustado',
-      oldValue: 300,
-      newValue: 350,
-      date: '2023-10-20',
-    },
-    {
-      id: 'h8',
-      type: 'transaction',
-      description: 'Consulta médica',
-      amount: 200.0,
-      date: '2023-10-19',
-      category: 'Saúde',
-    },
-    {
-      id: 'h9',
-      type: 'transaction',
-      description: 'Presente de aniversário',
-      amount: 100.0,
-      date: '2023-10-18',
-      category: 'Presentes',
-    },
-    {
-      id: 'h10',
-      type: 'group_activity',
-      description: 'Despesa "Jantar de Grupo" adicionada',
-      date: '2023-10-17',
-    },
-  ];
+  useEffect(() => {
+    const fetchHistory = async () => {
+      if (!user || !user.activeGroup) {
+        setLoading(false);
+        setError('Nenhum grupo ativo selecionado.');
+        return;
+      }
 
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case 'transaction':
-        return <IconWallet size={18} />;
-      case 'budget_change':
-        return <IconChartBar size={18} />;
-      case 'group_activity':
-        return <IconUsers size={18} />;
+      try {
+        setLoading(true);
+        const data = await activityLogApi.getActivitiesByGroup(user.activeGroup);
+        setHistoryEntries(data);
+      } catch (err) {
+        console.error('Failed to fetch activity history:', err);
+        setError('Falha ao carregar o histórico de atividades.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHistory();
+  }, [user]);
+
+  const getActivityIcon = (actionType: string) => {
+    switch (actionType) {
+      case 'transaction_created':
+        return <IconPlus size={18} />;
+      case 'transaction_updated':
+        return <IconEdit size={18} />;
+      case 'transaction_deleted':
+        return <IconTrash size={18} />;
+      case 'budget_item_created':
+        return <IconPlus size={18} />;
+      case 'budget_item_updated':
+        return <IconEdit size={18} />;
+      case 'budget_item_deleted':
+        return <IconTrash size={18} />;
+      case 'member_invited':
+        return <IconUserPlus size={18} />;
+      case 'member_removed':
+        return <IconUserMinus size={18} />;
+      case 'group_created':
+        return <IconBuildingBank size={18} />;
+      case 'group_updated':
+        return <IconEdit size={18} />;
+      case 'group_deleted':
+        return <IconTrash size={18} />;
       default:
         return <IconWallet size={18} />;
     }
   };
 
-  const getActivityColor = (type: string) => {
-    switch (type) {
-      case 'transaction':
-        return 'blue';
-      case 'budget_change':
-        return 'green';
-      case 'group_activity':
-        return 'yellow';
-      default:
-        return 'gray';
-    }
+  const getActivityColor = (actionType: string) => {
+    if (actionType.includes('created')) return 'green';
+    if (actionType.includes('updated')) return 'blue';
+    if (actionType.includes('deleted')) return 'red';
+    if (actionType.includes('invited')) return 'teal';
+    if (actionType.includes('removed')) return 'orange';
+    if (actionType.includes('group')) return 'violet';
+    return 'gray';
   };
 
-  const renderHistoryItem = (item: (typeof historyEntries)[0]) => {
-    const formattedDate = new Date(item.date).toLocaleDateString('pt-BR');
+  const renderHistoryItem = (item: ActivityLog) => {
+    const formattedDate = new Date(item.createdAt).toLocaleDateString('pt-BR');
+    const formattedTime = new Date(item.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
     return (
-      <Card key={item.id} withBorder mb="sm">
+      <Card key={item._id} withBorder mb="sm">
         <Group wrap="nowrap" gap="md">
           <ThemeIcon
             size="lg"
             radius="xl"
-            color={getActivityColor(item.type)}
+            color={getActivityColor(item.actionType)}
             variant="light"
           >
-            {getActivityIcon(item.type)}
+            {getActivityIcon(item.actionType)}
           </ThemeIcon>
 
           <div style={{ flex: 1 }}>
             <Text fw={500}>{item.description}</Text>
-            {item.type === 'transaction' && (
-              <Text size="sm" c="dimmed">
-                {item.category}
-              </Text>
-            )}
-            {item.type === 'budget_change' && (
-              <Text size="sm" c="green">
-                De R$ {item.oldValue?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} para R${' '}
-                {item.newValue?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </Text>
-            )}
+            <Text size="sm" c="dimmed">
+              Por: {item.criadoPorNome}
+            </Text>
           </div>
 
           <Stack gap={0} align="flex-end">
-            {item.type === 'transaction' && (
-              <Text fw={700}>
-                R$ {item.amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </Text>
-            )}
             <Text size="sm" c="dimmed">
               {formattedDate}
+            </Text>
+            <Text size="xs" c="dimmed">
+              {formattedTime}
             </Text>
           </Stack>
         </Group>
@@ -191,10 +154,19 @@ export default function History() {
       </Group>
 
       <Paper p="md" radius="md" withBorder>
-        {historyEntries.length > 0 ? (
+        {loading ? (
+          <Center py="xl">
+            <Loader />
+            <Text ml="sm">Carregando histórico...</Text>
+          </Center>
+        ) : error ? (
+          <Text c="red" ta="center" py="xl">
+            {error}
+          </Text>
+        ) : historyEntries.length > 0 ? (
           historyEntries.map((item) => renderHistoryItem(item))
         ) : (
-          <Text c="dimmed\" ta="center\" py="xl">
+          <Text c="dimmed" ta="center" py="xl">
             Nenhuma atividade recente para exibir.
           </Text>
         )}

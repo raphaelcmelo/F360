@@ -3,6 +3,7 @@ import { Group, User } from "../types/user"; // Import updated Group and User ty
 import { Group as GroupType } from "../types/group"; // Import GroupType from group.ts
 import { Budget, PlannedBudgetItem } from "../types/budget";
 import { Transaction } from "../types/transaction"; // Import Transaction type
+import { ActivityLog } from "../types/activityLog"; // Import ActivityLog type
 
 // Create an axios instance
 export const api = axios.create({
@@ -135,6 +136,10 @@ export const groupApi = {
     const response = await api.delete(`/groups/${groupId}`);
     return response.data;
   },
+  removeMember: async (groupId: string, memberId: string) => {
+    const response = await api.delete(`/groups/${groupId}/members/${memberId}`);
+    return response.data;
+  },
 };
 
 export const budgetApi = {
@@ -241,5 +246,12 @@ export const transactionApi = {
   deleteTransaction: async (transactionId: string) => {
     const response = await api.delete(`/transactions/${transactionId}`);
     return response.data;
+  },
+};
+
+export const activityLogApi = {
+  getActivitiesByGroup: async (groupId: string): Promise<ActivityLog[]> => {
+    const response = await api.get(`/activities/group/${groupId}`);
+    return response.data.data;
   },
 };

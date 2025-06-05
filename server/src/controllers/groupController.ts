@@ -1,50 +1,50 @@
 import { Request, Response } from "express";
+import { z } from "zod";
 import Group, { IGroup } from "../models/Group";
 import User, { IUser } from "../models/User";
-import Token from "../models/Token"; // Import Token model
 import { CustomRequest } from "../middleware/authMiddleware";
-import {
-  CreateGroupSchema,
-  InviteMemberSchema,
-  UpdateGroupDisplayNameSchema,
-} from "../schemas";
-import { z } from "zod";
-import mongoose from "mongoose";
-import crypto from "crypto"; // For generating tokens
-import {
-  sendGroupInvitationEmail,
-  sendRegistrationInvitationEmail,
-} from "../utils/emailService"; // Import new email services
+import { createActivityLog } from "./activityLogController"; // Import the helper
 
 // @desc    Create a new group
 // @route   POST /api/groups
 // @access  Private
 export const createGroup = async (req: CustomRequest, res: Response) => {
   try {
-    const validatedData = CreateGroupSchema.parse(req.body);
-    const { nome } = validatedData;
+    const { nome } = req.body;
 
-    if (!req.user) {
-      return res
-        .status(401)
-        .json({ success: false, error: "Usuário não autenticado." });
+    if (!nome) {
+      return res.status(400).json({
+        success: false,
+        error: "O nome do grupo é obrigatório.",
+      });
+    }
+
+    if (!req.user || !req.user.id || !req.user.name) {
+      return res.status(401).json({
+        success: false,
+        error: "Usuário não autenticado ou informações incompletas.",
+      });
     }
 
     const newGroup: IGroup = await Group.create({
       nome,
-      criadoPor: req.user.id,
       membros: [{ userId: req.user.id, role: "admin" }], // Creator is admin
+      criadoPor: req.user.id,
     });
 
-    // Add the new group to the creator's groups array
-    await User.findByIdAndUpdate(
+    // Add group to user's groups list
+    await User.findByIdAndUpdate(req.user.id, {
+      $push: { grupos: { groupId: newGroup._id, displayName: newGroup.nome } },
+    });
+
+    // Log activity
+    await createActivityLog(
+      newGroup._id,
       req.user.id,
-      {
-        $push: {
-          grupos: { groupId: newGroup._id, displayName: newGroup.nome },
-        },
-      },
-      { new: true }
+      req.user.name,
+      "group_created",
+      `Grupo "${newGroup.nome}" criado.`,
+      { groupId: newGroup._id, groupName: newGroup.nome }
     );
 
     res.status(201).json({
@@ -53,13 +53,6 @@ export const createGroup = async (req: CustomRequest, res: Response) => {
       message: "Grupo criado com sucesso.",
     });
   } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        success: false,
-        error: error.errors,
-        message: "Dados de grupo inválidos.",
-      });
-    }
     console.error("Error creating group:", error);
     res.status(500).json({
       success: false,
@@ -68,289 +61,255 @@ export const createGroup = async (req: CustomRequest, res: Response) => {
   }
 };
 
-// @desc    Get all groups a user belongs to
+// @desc    Get all groups for the authenticated user
 // @route   GET /api/groups
 // @access  Private
 export const getUserGroups = async (req: CustomRequest, res: Response) => {
   try {
-    if (!req.user) {
-      return res
-        .status(401)
-        .json({ success: false, error: "Usuário não autenticado." });
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        success: false,
+        error: "Usuário não autenticado.",
+      });
     }
 
-    // Populate the groups array in the user object
-    const userWithGroups = await User.findById(req.user.id).populate({
-      path: "grupos.groupId",
-      model: "Group",
-      select: "-__v", // Exclude __v field from the populated Group
-    });
-
-    if (!userWithGroups) {
-      return res
-        .status(404)
-        .json({ success: false, error: "Usuário não encontrado." });
-    }
-
-    // Transform the groups to include the user-specific displayName directly on the group object
-    const transformedGroups = userWithGroups.grupos
-      .filter((group) => group.groupId !== null) // Filter out any null groupIds
-      .map((groupAssociation) => ({
-        _id: groupAssociation.groupId._id,
-        nome: groupAssociation.groupId.nome,
-        membros: groupAssociation.groupId.membros,
-        criadoPor: groupAssociation.groupId.criadoPor,
-        createdAt: groupAssociation.groupId.createdAt,
-        updatedAt: groupAssociation.groupId.updatedAt,
-        displayName: groupAssociation.displayName, // Add the user-specific display name
-      }));
+    // Find groups where the user is a member
+    const groups: IGroup[] = await Group.find({
+      "membros.userId": req.user.id,
+    }).populate("membros.userId", "name email"); // Populate member details
 
     res.status(200).json({
       success: true,
-      data: transformedGroups,
-      message: "Grupos do usuário recuperados com sucesso.",
+      data: groups,
+      message: "Grupos recuperados com sucesso.",
     });
   } catch (error: any) {
     console.error("Error fetching user groups:", error);
     res.status(500).json({
       success: false,
-      error: "Erro interno do servidor ao buscar grupos do usuário.",
+      error: "Erro interno do servidor ao buscar grupos.",
     });
   }
 };
 
 // @desc    Invite a member to a group
 // @route   POST /api/groups/:groupId/invite
-// @access  Private
-export const inviteMemberToGroup = async (
-  req: CustomRequest,
-  res: Response
-) => {
+// @access  Private (Group Admin)
+export const inviteMember = async (req: CustomRequest, res: Response) => {
   try {
     const { groupId } = req.params;
-    const validatedData = InviteMemberSchema.parse(req.body);
-    const { email } = validatedData;
+    const { email } = req.body;
 
-    if (!req.user) {
-      return res
-        .status(401)
-        .json({ success: false, error: "Usuário não autenticado." });
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: "O email do membro é obrigatório.",
+      });
     }
 
-    // Populate the 'userId' field within the 'membros' array
-    const group = await Group.findById(groupId).populate("membros.userId");
+    if (!req.user || !req.user.id || !req.user.name) {
+      return res.status(401).json({
+        success: false,
+        error: "Usuário não autenticado ou informações incompletas.",
+      });
+    }
+
+    const group: IGroup | null = await Group.findById(groupId);
 
     if (!group) {
-      return res
-        .status(404)
-        .json({ success: false, error: "Grupo não encontrado." });
+      return res.status(404).json({
+        success: false,
+        error: "Grupo não encontrado.",
+      });
     }
 
-    console.log("Inviting user ID:", req.user.id);
-    console.log("Group members:", group.membros);
-
     // Check if the inviting user is an admin of the group
-    const inviterIsAdmin = group.membros.some((member) => {
-      console.log("Checking member:", member);
-      console.log("Member userId:", member?.userId);
-      console.log("Member role:", member?.role);
-      // Now member.userId should be populated, so we can directly compare IDs
-      const isMatch =
-        member && member.userId && member.userId.equals(req.user!.id);
-      const hasRole =
-        member && (member.role === "admin" || member.role === "owner");
-      console.log("Is user ID match?", isMatch);
-      console.log("Has admin/owner role?", hasRole);
-      return isMatch && hasRole;
-    });
-
-    console.log("Inviter is admin:", inviterIsAdmin);
+    const inviterIsAdmin = group.membros.some(
+      (member) =>
+        member.userId.equals(req.user!.id) && member.role === "admin"
+    );
 
     if (!inviterIsAdmin) {
       return res.status(403).json({
         success: false,
-        error: "Você não tem permissão para convidar membros para este grupo.",
+        error: "Não autorizado a convidar membros para este grupo.",
       });
     }
 
-    const invitedUser = await User.findOne({ email });
+    const newMember: IUser | null = await User.findOne({ email });
 
-    // Generate a unique token for the invitation
-    const invitationToken = crypto.randomBytes(32).toString("hex");
-    const hashedToken = crypto
-      .createHash("sha256")
-      .update(invitationToken)
-      .digest("hex");
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
-
-    if (invitedUser) {
-      // User is already registered
-      const isAlreadyMember = group.membros.some((member) =>
-        member.userId.equals(invitedUser._id)
-      );
-
-      if (isAlreadyMember) {
-        return res.status(400).json({
-          success: false,
-          error: "Este usuário já é membro deste grupo.",
-        });
-      }
-
-      // Create a token for registered user to accept the invite
-      await Token.create({
-        userId: invitedUser._id,
-        groupId: group._id,
-        token: hashedToken,
-        type: "groupInvitation",
-        expiresAt,
-      });
-
-      await sendGroupInvitationEmail(
-        email,
-        group.nome,
-        group._id.toString(),
-        invitationToken
-      );
-
-      res.status(200).json({
-        success: true,
-        message: "Convite enviado com sucesso para o usuário registrado.",
-      });
-    } else {
-      // User is not registered, send registration invitation
-      // Create a token linked to the email for registration and group association
-      await Token.create({
-        invitedEmail: email,
-        groupId: group._id,
-        token: hashedToken,
-        type: "groupInvitation",
-        expiresAt,
-      });
-
-      await sendRegistrationInvitationEmail(
-        email,
-        group.nome,
-        group._id.toString(),
-        invitationToken
-      );
-
-      res.status(200).json({
-        success: true,
-        message: "Convite de registro enviado com sucesso para o novo usuário.",
+    if (!newMember) {
+      return res.status(404).json({
+        success: false,
+        error: "Usuário com este email não encontrado.",
       });
     }
-  } catch (error: any) {
-    if (error instanceof z.ZodError) {
+
+    // Check if member is already in the group
+    if (group.membros.some((member) => member.userId.equals(newMember._id))) {
       return res.status(400).json({
         success: false,
-        error: error.errors,
-        message: "Dados de convite inválidos.",
+        error: "Este usuário já é membro do grupo.",
       });
     }
-    console.error("Error inviting member to group:", error);
+
+    group.membros.push({ userId: newMember._id, role: "member" });
+    await group.save();
+
+    // Add group to the invited user's groups list
+    await User.findByIdAndUpdate(newMember._id, {
+      $push: { grupos: { groupId: group._id, displayName: group.nome } },
+    });
+
+    // Log activity
+    await createActivityLog(
+      group._id,
+      req.user.id,
+      req.user.name,
+      "member_invited",
+      `Membro "${newMember.name}" (${newMember.email}) convidado para o grupo "${group.nome}".`,
+      { groupId: group._id, invitedUserId: newMember._id, invitedUserName: newMember.name }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Membro convidado com sucesso.",
+    });
+  } catch (error: any) {
+    console.error("Error inviting member:", error);
     res.status(500).json({
       success: false,
-      error: "Erro interno do servidor ao convidar membro para o grupo.",
+      error: "Erro interno do servidor ao convidar membro.",
     });
   }
 };
 
-// @desc    Update group display name for a user
+// @desc    Update group display name
 // @route   PUT /api/groups/:groupId/display-name
-// @access  Private
-export const updateGroupDisplayName = async (
-  req: CustomRequest,
-  res: Response
-) => {
+// @access  Private (Group Admin)
+export const updateGroupDisplayName = async (req: CustomRequest, res: Response) => {
   try {
     const { groupId } = req.params;
-    const validatedData = UpdateGroupDisplayNameSchema.parse(req.body);
-    const { newDisplayName } = validatedData;
+    const { newDisplayName } = req.body;
 
-    if (!req.user) {
-      return res
-        .status(401)
-        .json({ success: false, error: "Usuário não autenticado." });
-    }
-
-    // Find the user and update the displayName for the specific group
-    const user = await User.findById(req.user.id);
-
-    if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, error: "Usuário não encontrado." });
-    }
-
-    const groupIndex = user.grupos.findIndex((g) => g.groupId.equals(groupId));
-
-    if (groupIndex === -1) {
-      return res.status(404).json({
+    if (!newDisplayName) {
+      return res.status(400).json({
         success: false,
-        error: "Grupo não encontrado nas suas associações.",
+        error: "O novo nome de exibição é obrigatório.",
       });
     }
 
-    user.grupos[groupIndex].displayName = newDisplayName;
-    await user.save();
+    if (!req.user || !req.user.id || !req.user.name) {
+      return res.status(401).json({
+        success: false,
+        error: "Usuário não autenticado ou informações incompletas.",
+      });
+    }
+
+    const group: IGroup | null = await Group.findById(groupId);
+
+    if (!group) {
+      return res.status(404).json({
+        success: false,
+        error: "Grupo não encontrado.",
+      });
+    }
+
+    // Check if the updating user is an admin of the group
+    const updaterIsAdmin = group.membros.some(
+      (member) =>
+        member.userId.equals(req.user!.id) && member.role === "admin"
+    );
+
+    if (!updaterIsAdmin) {
+      return res.status(403).json({
+        success: false,
+        error: "Não autorizado a atualizar o nome deste grupo.",
+      });
+    }
+
+    const oldDisplayName = group.nome;
+    group.nome = newDisplayName;
+    await group.save();
+
+    // Update display name in all members' user documents
+    await User.updateMany(
+      { "grupos.groupId": group._id },
+      { $set: { "grupos.$.displayName": newDisplayName } }
+    );
+
+    // Log activity
+    await createActivityLog(
+      group._id,
+      req.user.id,
+      req.user.name,
+      "group_updated",
+      `Nome do grupo alterado de "${oldDisplayName}" para "${newDisplayName}".`,
+      { groupId: group._id, oldName: oldDisplayName, newName: newDisplayName }
+    );
 
     res.status(200).json({
       success: true,
       message: "Nome de exibição do grupo atualizado com sucesso.",
-      data: user.grupos[groupIndex],
+      data: group,
     });
   } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        success: false,
-        error: error.errors,
-        message: "Dados de atualização inválidos.",
-      });
-    }
     console.error("Error updating group display name:", error);
     res.status(500).json({
       success: false,
-      error: "Erro interno do servidor ao atualizar nome de exibição do grupo.",
+      error: "Erro interno do servidor ao atualizar nome do grupo.",
     });
   }
 };
 
 // @desc    Delete a group
 // @route   DELETE /api/groups/:groupId
-// @access  Private
+// @access  Private (Group Admin)
 export const deleteGroup = async (req: CustomRequest, res: Response) => {
   try {
     const { groupId } = req.params;
 
-    if (!req.user) {
-      return res
-        .status(401)
-        .json({ success: false, error: "Usuário não autenticado." });
-    }
-
-    const group = await Group.findById(groupId);
-
-    if (!group) {
-      return res
-        .status(404)
-        .json({ success: false, error: "Grupo não encontrado." });
-    }
-
-    // Check if the user is the creator of the group
-    if (!group.criadoPor.equals(req.user.id)) {
-      return res.status(403).json({
+    if (!req.user || !req.user.id || !req.user.name) {
+      return res.status(401).json({
         success: false,
-        error: "Você não tem permissão para deletar este grupo.",
+        error: "Usuário não autenticado ou informações incompletas.",
       });
     }
 
-    // Remove group from all members' group lists
+    const group: IGroup | null = await Group.findById(groupId);
+
+    if (!group) {
+      return res.status(404).json({
+        success: false,
+        error: "Grupo não encontrado.",
+      });
+    }
+
+    // Check if the deleting user is the creator of the group
+    if (!group.criadoPor.equals(req.user.id)) {
+      return res.status(403).json({
+        success: false,
+        error: "Não autorizado a deletar este grupo. Apenas o criador pode deletar.",
+      });
+    }
+
+    // Remove group from all members' user documents
     await User.updateMany(
-      { "grupos.groupId": groupId },
-      { $pull: { grupos: { groupId: groupId } } }
+      { "grupos.groupId": group._id },
+      { $pull: { grupos: { groupId: group._id } } }
     );
 
-    await group.deleteOne(); // Use deleteOne() instead of remove()
+    await group.deleteOne(); // Use deleteOne() for Mongoose 6+
+
+    // Log activity (this log will be associated with the user, but the group will no longer exist)
+    await createActivityLog(
+      group._id, // Still log with the group ID even if it's being deleted
+      req.user.id,
+      req.user.name,
+      "group_deleted",
+      `Grupo "${group.nome}" excluído.`,
+      { groupId: group._id, groupName: group.nome }
+    );
 
     res.status(200).json({
       success: true,
@@ -361,6 +320,96 @@ export const deleteGroup = async (req: CustomRequest, res: Response) => {
     res.status(500).json({
       success: false,
       error: "Erro interno do servidor ao deletar grupo.",
+    });
+  }
+};
+
+// @desc    Remove a member from a group
+// @route   DELETE /api/groups/:groupId/members/:memberId
+// @access  Private (Group Admin)
+export const removeMember = async (req: CustomRequest, res: Response) => {
+  try {
+    const { groupId, memberId } = req.params;
+
+    if (!req.user || !req.user.id || !req.user.name) {
+      return res.status(401).json({
+        success: false,
+        error: "Usuário não autenticado ou informações incompletas.",
+      });
+    }
+
+    const group: IGroup | null = await Group.findById(groupId);
+
+    if (!group) {
+      return res.status(404).json({
+        success: false,
+        error: "Grupo não encontrado.",
+      });
+    }
+
+    // Check if the removing user is an admin of the group
+    const removerIsAdmin = group.membros.some(
+      (member) =>
+        member.userId.equals(req.user!.id) && member.role === "admin"
+    );
+
+    if (!removerIsAdmin) {
+      return res.status(403).json({
+        success: false,
+        error: "Não autorizado a remover membros deste grupo.",
+      });
+    }
+
+    // Prevent admin from removing themselves if they are the only admin
+    const targetMember = group.membros.find(m => m.userId.toString() === memberId);
+    if (targetMember && targetMember.role === 'admin') {
+      const adminCount = group.membros.filter(m => m.role === 'admin').length;
+      if (adminCount === 1 && targetMember.userId.equals(req.user.id)) {
+        return res.status(400).json({
+          success: false,
+          error: "Você não pode se remover como o único administrador do grupo.",
+        });
+      }
+    }
+
+    const memberToRemove = await User.findById(memberId);
+    if (!memberToRemove) {
+      return res.status(404).json({
+        success: false,
+        error: "Membro não encontrado.",
+      });
+    }
+
+    // Remove member from the group's members list
+    group.membros = group.membros.filter(
+      (member) => !member.userId.equals(memberId)
+    );
+    await group.save();
+
+    // Remove group from the member's groups list
+    await User.findByIdAndUpdate(memberId, {
+      $pull: { grupos: { groupId: group._id } },
+    });
+
+    // Log activity
+    await createActivityLog(
+      group._id,
+      req.user.id,
+      req.user.name,
+      "member_removed",
+      `Membro "${memberToRemove.name}" (${memberToRemove.email}) removido do grupo "${group.nome}".`,
+      { groupId: group._id, removedUserId: memberToRemove._id, removedUserName: memberToRemove.name }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Membro removido com sucesso.",
+    });
+  } catch (error: any) {
+    console.error("Error removing member:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erro interno do servidor ao remover membro.",
     });
   }
 };

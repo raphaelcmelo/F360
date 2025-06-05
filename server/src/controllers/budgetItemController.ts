@@ -1,302 +1,206 @@
 import { Request, Response } from "express";
-import PlannedBudgetItem from "../models/PlannedBudgetItem";
-import Budget from "../models/Budget";
-import Group from "../models/Group";
-import { AuthenticatedRequest, ApiResponse } from "../types";
-import {
-  CreatePlannedBudgetItemSchema,
-  UpdatePlannedBudgetItemSchema,
-} from "../schemas";
+import { z } from "zod";
+import PlannedBudgetItem, { IPlannedBudgetItem } from "../models/PlannedBudgetItem";
+import { CreatePlannedBudgetItemSchema, UpdatePlannedBudgetItemSchema } from "../schemas";
+import { CustomRequest } from "../middleware/authMiddleware";
+import { createActivityLog } from "./activityLogController"; // Import the helper
 
-// Create a new planned budget item
-export const createPlannedBudgetItem = async (
-  req: AuthenticatedRequest,
-  res: Response<ApiResponse>
-) => {
+// @desc    Create a new planned budget item
+// @route   POST /api/budget-items
+// @access  Private
+export const createPlannedBudgetItem = async (req: CustomRequest, res: Response) => {
   try {
     const validatedData = CreatePlannedBudgetItemSchema.parse(req.body);
-    const userId = req.user?._id;
-    const { budgetId, groupId, categoryType, nome, valorPlanejado } =
-      validatedData;
 
-    if (!userId) {
-      return res
-        .status(401)
-        .json({ success: false, error: "User not authenticated." });
-    }
+    const { budgetId, groupId, categoryType, nome, valorPlanejado } = validatedData;
 
-    // Verify if the budget exists and belongs to the specified group
-    const budget = await Budget.findById(budgetId);
-    if (!budget) {
-      return res
-        .status(404)
-        .json({ success: false, error: "Orçamento não encontrado." });
-    }
-    if (!budget.grupoId.equals(groupId)) {
-      return res.status(400).json({
+    if (!req.user || !req.user.id || !req.user.name) {
+      return res.status(401).json({
         success: false,
-        error: "O orçamento não pertence ao grupo especificado.",
+        error: "Usuário não autenticado ou informações incompletas.",
       });
     }
 
-    // Verify if the user is a member of the group associated with this budget
-    const group = await Group.findById(groupId);
-    if (
-      !group ||
-      !group.membros.some((member) => member.userId.equals(userId))
-    ) {
-      return res.status(403).json({
-        success: false,
-        error: "Você não tem permissão para adicionar itens a este orçamento.",
-      });
-    }
-
-    // Check for existing planned budget item with the same categoryType and nome for this budget
-    const existingItem = await PlannedBudgetItem.findOne({
-      budgetId,
-      categoryType,
-      nome: { $regex: new RegExp(`^${nome}$`, "i") }, // Case-insensitive match for nome
-    });
-
-    if (existingItem) {
-      return res.status(409).json({
-        success: false,
-        error:
-          "Já existe uma entrada com a mesma categoria e tipo para este orçamento.",
-      });
-    }
-
-    const newPlannedBudgetItem = await PlannedBudgetItem.create({
+    const newBudgetItem: IPlannedBudgetItem = await PlannedBudgetItem.create({
       budgetId,
       groupId,
+      criadoPor: req.user.id,
+      criadoPorNome: req.user.name,
       categoryType,
       nome,
       valorPlanejado,
-      criadoPor: userId,
     });
+
+    // Log activity
+    await createActivityLog(
+      newBudgetItem.groupId,
+      req.user.id,
+      req.user.name,
+      "budget_item_created",
+      `Item de orçamento "${newBudgetItem.nome}" (${newBudgetItem.categoryType}) no valor de R$ ${newBudgetItem.valorPlanejado.toFixed(2)} criado.`,
+      { budgetItemId: newBudgetItem._id, budgetId: newBudgetItem.budgetId, name: newBudgetItem.nome, value: newBudgetItem.valorPlanejado }
+    );
 
     res.status(201).json({
       success: true,
-      data: newPlannedBudgetItem,
+      data: newBudgetItem,
       message: "Item de orçamento planejado criado com sucesso.",
     });
   } catch (error: any) {
-    if (error.name === "ZodError") {
+    if (error instanceof z.ZodError) {
       return res.status(400).json({
         success: false,
-        error: "Validation error",
-        details: error.errors,
+        error: error.errors,
+        message: "Dados de item de orçamento inválidos.",
       });
     }
     console.error("Error creating planned budget item:", error);
     res.status(500).json({
       success: false,
-      error: "Server error creating planned budget item.",
-      details: error.message, // Adicionado para depuração
-      stack: process.env.NODE_ENV === "development" ? error.stack : undefined, // Adicionado para depuração
+      error: "Erro interno do servidor ao criar item de orçamento planejado.",
     });
   }
 };
 
-// Get all planned budget items for a specific budget
-export const getPlannedBudgetItemsForBudget = async (
-  req: AuthenticatedRequest,
-  res: Response<ApiResponse>
-) => {
+// @desc    Get planned budget items for a specific budget
+// @route   GET /api/budget-items/budget/:budgetId
+// @access  Private
+export const getPlannedBudgetItemsForBudget = async (req: CustomRequest, res: Response) => {
   try {
     const { budgetId } = req.params;
-    const userId = req.user?._id;
 
-    if (!userId) {
-      return res
-        .status(401)
-        .json({ success: false, error: "User not authenticated." });
-    }
-
-    // Verify if the budget exists and the user has access to its group
-    const budget = await Budget.findById(budgetId);
-    if (!budget) {
-      return res
-        .status(404)
-        .json({ success: false, error: "Orçamento não encontrado." });
-    }
-
-    const group = await Group.findById(budget.grupoId);
-    if (
-      !group ||
-      !group.membros.some((member) => member.userId.equals(userId))
-    ) {
-      return res.status(403).json({
+    if (!budgetId) {
+      return res.status(400).json({
         success: false,
-        error: "Você não tem permissão para acessar os itens deste orçamento.",
+        error: "ID do orçamento é obrigatório.",
       });
     }
 
-    const plannedItems = await PlannedBudgetItem.find({ budgetId })
-      .sort({ categoryType: 1, nome: 1 })
-      .lean();
+    const budgetItems: IPlannedBudgetItem[] = await PlannedBudgetItem.find({ budgetId }).sort({
+      createdAt: -1,
+    });
 
     res.status(200).json({
       success: true,
-      data: plannedItems,
-      message: "Itens de orçamento planejado encontrados com sucesso.",
+      data: budgetItems,
+      message: "Itens de orçamento planejado recuperados com sucesso.",
     });
   } catch (error: any) {
     console.error("Error fetching planned budget items:", error);
     res.status(500).json({
       success: false,
-      error: "Server error fetching planned budget items.",
-      details: error.message, // Adicionado para depuração
-      stack: process.env.NODE_ENV === "development" ? error.stack : undefined, // Adicionado para depuração
+      error: "Erro interno do servidor ao buscar itens de orçamento planejado.",
     });
   }
 };
 
-// Update a planned budget item
-export const updatePlannedBudgetItem = async (
-  req: AuthenticatedRequest,
-  res: Response<ApiResponse>
-) => {
+// @desc    Update a planned budget item
+// @route   PUT /api/budget-items/:itemId
+// @access  Private
+export const updatePlannedBudgetItem = async (req: CustomRequest, res: Response) => {
   try {
     const { itemId } = req.params;
     const validatedData = UpdatePlannedBudgetItemSchema.parse(req.body);
-    const userId = req.user?._id;
 
-    if (!userId) {
-      return res
-        .status(401)
-        .json({ success: false, error: "User not authenticated." });
-    }
+    const budgetItem: IPlannedBudgetItem | null = await PlannedBudgetItem.findById(itemId);
 
-    const item = await PlannedBudgetItem.findById(itemId);
-
-    if (!item) {
+    if (!budgetItem) {
       return res.status(404).json({
         success: false,
         error: "Item de orçamento planejado não encontrado.",
       });
     }
 
-    // Verify if the user has access to the group associated with this item's budget
-    const budget = await Budget.findById(item.budgetId);
-    if (!budget) {
-      return res
-        .status(404)
-        .json({ success: false, error: "Orçamento associado não encontrado." });
-    }
-    const group = await Group.findById(budget.grupoId);
-    if (
-      !group ||
-      !group.membros.some((member) => member.userId.equals(userId))
-    ) {
+    // Ensure the user updating is the one who created it or an admin/group owner
+    if (!req.user || !budgetItem.criadoPor.equals(req.user.id)) {
       return res.status(403).json({
         success: false,
-        error: "Você não tem permissão para atualizar este item.",
+        error: "Não autorizado a atualizar este item de orçamento.",
       });
     }
 
-    // If nome or categoryType are being updated, check for duplicates
-    if (
-      validatedData.nome !== undefined ||
-      validatedData.categoryType !== undefined
-    ) {
-      const newNome =
-        validatedData.nome !== undefined ? validatedData.nome : item.nome;
-      const newCategoryType =
-        validatedData.categoryType !== undefined
-          ? validatedData.categoryType
-          : item.categoryType;
+    const oldBudgetItem = { ...budgetItem.toObject() }; // Capture old state
 
-      const existingItemWithSameNameAndCategory =
-        await PlannedBudgetItem.findOne({
-          _id: { $ne: itemId }, // Exclude the current item
-          budgetId: item.budgetId,
-          categoryType: newCategoryType,
-          nome: { $regex: new RegExp(`^${newNome}$`, "i") },
-        });
+    const updatedBudgetItem = await PlannedBudgetItem.findByIdAndUpdate(
+      itemId,
+      validatedData,
+      { new: true, runValidators: true }
+    );
 
-      if (existingItemWithSameNameAndCategory) {
-        return res.status(409).json({
-          success: false,
-          error:
-            "Já existe outra entrada com a mesma categoria e tipo para este orçamento.",
-        });
-      }
+    if (updatedBudgetItem) {
+      // Log activity
+      await createActivityLog(
+        updatedBudgetItem.groupId,
+        req.user.id,
+        req.user.name,
+        "budget_item_updated",
+        `Item de orçamento "${oldBudgetItem.nome}" atualizado (R$ ${oldBudgetItem.valorPlanejado.toFixed(2)} para R$ ${updatedBudgetItem.valorPlanejado.toFixed(2)}).`,
+        {
+          budgetItemId: updatedBudgetItem._id,
+          oldValue: oldBudgetItem.valorPlanejado,
+          newValue: updatedBudgetItem.valorPlanejado,
+          oldName: oldBudgetItem.nome,
+          newName: updatedBudgetItem.nome,
+        }
+      );
     }
-
-    // Update the item
-    Object.assign(item, validatedData);
-    await item.save();
 
     res.status(200).json({
       success: true,
-      data: item,
+      data: updatedBudgetItem,
       message: "Item de orçamento planejado atualizado com sucesso.",
     });
   } catch (error: any) {
-    if (error.name === "ZodError") {
+    if (error instanceof z.ZodError) {
       return res.status(400).json({
         success: false,
-        error: "Validation error",
-        details: error.errors,
+        error: error.errors,
+        message: "Dados de atualização inválidos.",
       });
     }
     console.error("Error updating planned budget item:", error);
     res.status(500).json({
       success: false,
-      error: "Server error updating planned budget item.",
-      details: error.message, // Adicionado para depuração
-      stack: process.env.NODE_ENV === "development" ? error.stack : undefined, // Adicionado para depuração
+      error: "Erro interno do servidor ao atualizar item de orçamento planejado.",
     });
   }
 };
 
-// Delete a planned budget item
-export const deletePlannedBudgetItem = async (
-  req: AuthenticatedRequest,
-  res: Response<ApiResponse>
-) => {
+// @desc    Delete a planned budget item
+// @route   DELETE /api/budget-items/:itemId
+// @access  Private
+export const deletePlannedBudgetItem = async (req: CustomRequest, res: Response) => {
   try {
     const { itemId } = req.params;
-    const userId = req.user?._id;
 
-    if (!userId) {
-      return res
-        .status(401)
-        .json({ success: false, error: "User not authenticated." });
-    }
+    const budgetItem: IPlannedBudgetItem | null = await PlannedBudgetItem.findById(itemId);
 
-    const item = await PlannedBudgetItem.findById(itemId);
-
-    if (!item) {
+    if (!budgetItem) {
       return res.status(404).json({
         success: false,
         error: "Item de orçamento planejado não encontrado.",
       });
     }
 
-    // Verify if the user has access to the group associated with this item's budget
-    const budget = await Budget.findById(item.budgetId);
-    if (!budget) {
-      return res
-        .status(404)
-        .json({ success: false, error: "Orçamento associado não encontrado." });
-    }
-    const group = await Group.findById(budget.grupoId);
-    if (
-      !group ||
-      !group.membros.some((member) => member.userId.equals(userId))
-    ) {
+    // Ensure the user deleting is the one who created it or an admin/group owner
+    if (!req.user || !budgetItem.criadoPor.equals(req.user.id)) {
       return res.status(403).json({
         success: false,
-        error: "Você não tem permissão para deletar este item.",
+        error: "Não autorizado a deletar este item de orçamento.",
       });
     }
 
-    // Only the creator of the item or the budget creator can delete it (or group admin)
-    // For simplicity, let's allow any group member to delete their own item or an item in a budget they have access to.
-    // If you want stricter control, you might check item.criadoPor.equals(userId)
-    await PlannedBudgetItem.deleteOne({ _id: itemId });
+    await PlannedBudgetItem.findByIdAndDelete(itemId);
+
+    // Log activity
+    await createActivityLog(
+      budgetItem.groupId,
+      req.user.id,
+      req.user.name,
+      "budget_item_deleted",
+      `Item de orçamento "${budgetItem.nome}" excluído.`,
+      { budgetItemId: budgetItem._id, name: budgetItem.nome, value: budgetItem.valorPlanejado }
+    );
 
     res.status(200).json({
       success: true,
@@ -306,9 +210,7 @@ export const deletePlannedBudgetItem = async (
     console.error("Error deleting planned budget item:", error);
     res.status(500).json({
       success: false,
-      error: "Server error deleting planned budget item.",
-      details: error.message, // Adicionado para depuração
-      stack: process.env.NODE_ENV === "development" ? error.stack : undefined, // Adicionado para depuração
+      error: "Erro interno do servidor ao deletar item de orçamento planejado.",
     });
   }
 };

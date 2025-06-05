@@ -12,6 +12,7 @@ import budgetRoutes from "./budgetRoutes"; // Import budget routes
 import budgetItemRoutes from "./budgetItemRoutes"; // Import budget item routes
 import transactionRoutes from "./transactionRoutes"; // Import transaction routes
 import groupRoutes from "./groupRoutes"; // Import group routes
+import activityLogRoutes from "./activityLogRoutes"; // Import activity log routes
 
 const router = Router();
 
@@ -30,5 +31,8 @@ router.use("/groups", groupRoutes); // Use group routes
 router.use("/budgets", budgetRoutes);
 router.use("/budget-items", budgetItemRoutes);
 router.use("/transactions", transactionRoutes); // Use transaction routes
+
+// Activity Log routes
+router.use("/activities", activityLogRoutes); // Use activity log routes
 
 export default router;
