@@ -46,6 +46,13 @@ const inviteMemberSchema = z.object({
 
 type InviteMemberFormValues = z.infer<typeof inviteMemberSchema>;
 
+// Schema for updating group display name
+const updateDisplayNameSchema = z.object({
+  displayName: z.string().min(1, "O nome de exibição é obrigatório"),
+});
+
+type UpdateDisplayNameFormValues = z.infer<typeof updateDisplayNameSchema>;
+
 export default function Groups() {
   const [groups, setGroups] = useState<UserGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -56,6 +63,8 @@ export default function Groups() {
   const [inviteModalOpened, { open: openInviteModal, close: closeInviteModal }] =
     useDisclosure(false);
   const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] =
+    useDisclosure(false);
+  const [editModalOpened, { open: openEditModal, close: closeEditModal }] =
     useDisclosure(false);
 
   const [selectedGroup, setSelectedGroup] = useState<UserGroup | null>(null);
@@ -72,6 +81,13 @@ export default function Groups() {
     resolver: zodResolver(inviteMemberSchema),
     defaultValues: {
       email: "",
+    },
+  });
+
+  const editForm = useForm<UpdateDisplayNameFormValues>({
+    resolver: zodResolver(updateDisplayNameSchema),
+    defaultValues: {
+      displayName: "",
     },
   });
 
@@ -175,6 +191,36 @@ export default function Groups() {
     }
   };
 
+  const handleEditGroupClick = (group: UserGroup) => {
+    setSelectedGroup(group);
+    editForm.reset({ displayName: group.displayName || group.nome }); // Pre-fill with current display name or original name
+    openEditModal();
+  };
+
+  const handleUpdateDisplayName = async (values: UpdateDisplayNameFormValues) => {
+    if (!selectedGroup) return;
+
+    try {
+      await groupApi.updateGroupDisplayName(selectedGroup._id, values.displayName);
+      notifications.show({
+        title: "Sucesso",
+        message: `Nome de exibição do grupo atualizado para "${values.displayName}"!`,
+        color: "green",
+      });
+      closeEditModal();
+      editForm.reset();
+      fetchGroups(); // Re-fetch groups to update the list with the new display name
+    } catch (error: any) {
+      console.error("Error updating display name:", error);
+      notifications.show({
+        title: "Erro",
+        message:
+          error.response?.data?.error || "Não foi possível atualizar o nome de exibição.",
+        color: "red",
+      });
+    }
+  };
+
   return (
     <motion.div
       className="page-transition"
@@ -224,7 +270,7 @@ export default function Groups() {
         <Table striped highlightOnHover>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>Nome do Grupo</Table.Th> {/* Renamed from "Nome de Exibição" */}
+              <Table.Th>Nome do Grupo</Table.Th>
               <Table.Th>Membros</Table.Th>
               <Table.Th>Criado Em</Table.Th>
               <Table.Th style={{ textAlign: "center" }}>Ações</Table.Th>
@@ -233,7 +279,7 @@ export default function Groups() {
           <Table.Tbody>
             {isLoading ? (
               <Table.Tr>
-                <Table.Td colSpan={4}> {/* Adjusted colspan */}
+                <Table.Td colSpan={4}>
                   <Center>
                     <Loader size="sm" />
                     <Text ml="sm" c="dimmed">
@@ -244,14 +290,14 @@ export default function Groups() {
               </Table.Tr>
             ) : groups.length === 0 ? (
               <Table.Tr>
-                <Table.Td colSpan={4} style={{ textAlign: "center" }}> {/* Adjusted colspan */}
+                <Table.Td colSpan={4} style={{ textAlign: "center" }}>
                   <Text c="dimmed">Nenhum grupo encontrado.</Text>
                 </Table.Td>
               </Table.Tr>
             ) : (
               groups.map((group) => (
                 <Table.Tr key={group._id}>
-                  <Table.Td>{group.displayName || group.nome}</Table.Td> {/* Display displayName or nome */}
+                  <Table.Td>{group.displayName || group.nome}</Table.Td>
                   <Table.Td>{group.membros?.length || 0}</Table.Td>
                   <Table.Td>
                     {new Date(group.createdAt).toLocaleDateString("pt-BR")}
@@ -267,16 +313,15 @@ export default function Groups() {
                       >
                         <IconUserPlus size={14} />
                       </ActionIcon>
-                      {/* Add edit functionality later if needed */}
-                      {/* <ActionIcon
+                      <ActionIcon
                         variant="subtle"
                         color="gray"
                         size="sm"
-                        onClick={() => handleEditClick(group)}
-                        aria-label="Editar grupo"
+                        onClick={() => handleEditGroupClick(group)}
+                        aria-label="Editar nome de exibição do grupo"
                       >
                         <IconEdit size={14} />
-                      </ActionIcon> */}
+                      </ActionIcon>
                       <ActionIcon
                         variant="subtle"
                         color="red"
@@ -356,6 +401,42 @@ export default function Groups() {
                   Cancelar
                 </Button>
                 <Button type="submit">Enviar Convite</Button>
+              </Group>
+            </Stack>
+          </form>
+        )}
+      </Modal>
+
+      {/* Edit Group Display Name Modal */}
+      <Modal
+        opened={editModalOpened}
+        onClose={closeEditModal}
+        title={`Editar Nome de Exibição do Grupo "${selectedGroup?.nome}"`}
+        centered
+      >
+        {selectedGroup && (
+          <form onSubmit={editForm.handleSubmit(handleUpdateDisplayName)}>
+            <Stack>
+              <Text>
+                Defina um nome de exibição personalizado para este grupo.
+              </Text>
+              <Controller
+                name="displayName"
+                control={editForm.control}
+                render={({ field }) => (
+                  <TextInput
+                    label="Nome de Exibição"
+                    placeholder="Ex: Meu Grupo Familiar"
+                    error={editForm.formState.errors.displayName?.message}
+                    {...field}
+                  />
+                )}
+              />
+              <Group justify="flex-end" mt="md">
+                <Button variant="default" onClick={closeEditModal}>
+                  Cancelar
+                </Button>
+                <Button type="submit">Salvar Alterações</Button>
               </Group>
             </Stack>
           </form>

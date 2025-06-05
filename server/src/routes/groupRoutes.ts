@@ -1,18 +1,22 @@
-import { Router } from "express";
+import express from "express";
 import {
   createGroup,
   getUserGroups,
   inviteMemberToGroup,
   updateGroupDisplayName,
-  deleteGroup, // Import deleteGroup
+  deleteGroup,
 } from "../controllers/groupController";
+import { acceptGroupInvitation } from "../controllers/groupInvitationController"; // Import the new controller
 import { protect } from "../middleware/authMiddleware";
 
-const router = Router();
+const router = express.Router();
 
 router.route("/").post(protect, createGroup).get(protect, getUserGroups);
-router.post("/:groupId/invite", protect, inviteMemberToGroup);
-router.put("/:groupId/display-name", protect, updateGroupDisplayName);
-router.delete("/:groupId", protect, deleteGroup); // Add delete route
+router.route("/:groupId/invite").post(protect, inviteMemberToGroup);
+router.route("/:groupId/display-name").put(protect, updateGroupDisplayName);
+router.route("/:groupId").delete(protect, deleteGroup);
+
+// New route for accepting group invitations
+router.route("/accept-invite").post(protect, acceptGroupInvitation);
 
 export default router;

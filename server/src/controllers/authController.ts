@@ -9,9 +9,11 @@ import {
   CreateUserSchema,
   ForgotPasswordSchema,
   ResetPasswordSchema,
+  AcceptGroupInvitationSchema, // Import the new schema
 } from "../schemas";
 import { AuthenticatedRequest, ApiResponse } from "../types";
 import { sendPasswordResetEmail } from "../utils/emailService";
+import { z } from "zod"; // Import Zod for schema parsing
 
 const generateToken = (userId: string): string => {
   return jwt.sign({ userId }, process.env.JWT_SECRET as string, {
@@ -25,8 +27,9 @@ export const register = async (
 ): Promise<void> => {
   try {
     const validatedData = CreateUserSchema.parse(req.body);
+    const { email, name, password } = validatedData;
 
-    const existingUser = await User.findOne({ email: validatedData.email });
+    const existingUser = await User.findOne({ email });
     if (existingUser) {
       res.status(400).json({
         success: false,
@@ -36,29 +39,72 @@ export const register = async (
       return;
     }
 
-    const user = await User.create(validatedData);
+    const user = await User.create({ email, name, password });
 
-    // Create a default personal group for the new user
-    const personalGroup = await Group.create({
-      nome: `Grupo Pessoal de ${user.name}`,
-      membros: [user._id],
-      criadoPor: user._id,
-    });
+    // Handle group invitation during registration
+    const { groupId, token } = req.body; // Expect groupId and token from query/body if it's an invitation
 
-    // Link the user to their new personal group
-    user.grupos.push({
-      groupId: personalGroup._id,
-      displayName: personalGroup.nome,
-    }); // Store groupId and displayName
-    await user.save();
+    if (groupId && token) {
+      const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
 
-    const token = generateToken(user._id);
+      const invitationTokenDoc = await Token.findOne({
+        token: hashedToken,
+        type: "groupInvitation",
+        groupId: groupId,
+        invitedEmail: email, // Ensure the token was for this email
+        expiresAt: { $gt: Date.now() },
+      });
+
+      if (invitationTokenDoc) {
+        const group = await Group.findById(groupId);
+
+        if (group) {
+          // Check if user is already a member (shouldn't happen if just registered, but good for safety)
+          const isAlreadyMember = group.membros.some((member) =>
+            member.userId.equals(user._id)
+          );
+
+          if (!isAlreadyMember) {
+            // Add new user to group's members
+            group.membros.push({ userId: user._id, role: "member" });
+            await group.save();
+
+            // Add group to user's groups
+            user.grupos.push({ groupId: group._id, displayName: group.nome });
+            await user.save();
+
+            notifications.show({
+              title: "Sucesso",
+              message: `Você foi adicionado ao grupo "${group.nome}"!`,
+              color: "green",
+            });
+          }
+        }
+        await Token.deleteOne({ _id: invitationTokenDoc._id }); // Invalidate the used token
+      }
+    } else {
+      // If no invitation, create a default personal group for the new user
+      const personalGroup = await Group.create({
+        nome: `Grupo Pessoal de ${user.name}`,
+        membros: [{ userId: user._id, role: "admin" }],
+        criadoPor: user._id,
+      });
+
+      // Link the user to their new personal group
+      user.grupos.push({
+        groupId: personalGroup._id,
+        displayName: personalGroup.nome,
+      });
+      await user.save();
+    }
+
+    const authToken = generateToken(user._id);
 
     res.status(201).json({
       success: true,
       data: {
-        user,
-        token,
+        user: user.toJSON(),
+        token: authToken,
       },
       message: "User registered successfully and personal group created.",
     });

@@ -1,69 +1,46 @@
 import { z } from "zod";
 
-export const CreateTransactionSchema = z.object({
-  grupoId: z.string(),
-  data: z.string().datetime(), // Expect ISO string from frontend
-  categoria: z.enum(["renda", "despesa", "conta", "poupanca"]),
-  tipo: z.string().min(1, "Tipo é obrigatório"),
-  valor: z.number().min(0.01, "O valor deve ser maior que zero"),
+// Auth Schemas
+export const CreateUserSchema = z.object({
+  name: z.string().min(1, "Nome é obrigatório"),
+  email: z.string().email("Formato de e-mail inválido"),
+  password: z.string().min(6, "A senha deve ter pelo menos 6 caracteres"),
 });
 
-export const UpdateTransactionSchema = z.object({
-  data: z.string().datetime().optional(),
-  categoria: z.enum(["renda", "despesa", "conta", "poupanca"]).optional(),
-  tipo: z.string().min(1, "Tipo é obrigatório").optional(),
-  valor: z.number().min(0.01, "O valor deve ser maior que zero").optional(),
+export const LoginSchema = z.object({
+  email: z.string().email("Formato de e-mail inválido"),
+  password: z.string().min(1, "Senha é obrigatória"),
 });
 
-// Schema for creating a new group
+export const ForgotPasswordSchema = z.object({
+  email: z.string().email("Formato de e-mail inválido"),
+});
+
+export const ResetPasswordSchema = z
+  .object({
+    password: z.string().min(6, "A nova senha deve ter pelo menos 6 caracteres"),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "As senhas não coincidem",
+    path: ["confirmPassword"],
+  });
+
+// Group Schemas
 export const CreateGroupSchema = z.object({
-  nome: z.string().min(1, "O nome do grupo é obrigatório."),
+  nome: z.string().min(1, "O nome do grupo é obrigatório"),
 });
 
-// Schema for updating group display name
-export const UpdateGroupDisplayNameSchema = z.object({
-  newDisplayName: z.string().min(1, "O novo nome de exibição é obrigatório."),
-});
-
-// Schema for inviting a member to a group
 export const InviteMemberSchema = z.object({
-  email: z.string().email("Formato de e-mail inválido."),
+  email: z.string().email("Formato de e-mail inválido"),
 });
 
-// Schema for creating a budget
-export const CreateBudgetSchema = z.object({
-  grupoId: z.string().min(1, "ID do grupo é obrigatório."),
-  dataInicio: z.string().datetime("Data de início inválida."),
-  dataFim: z.string().datetime("Data de fim inválida."),
+export const UpdateGroupDisplayNameSchema = z.object({
+  newDisplayName: z.string().min(1, "O nome de exibição é obrigatório"),
 });
 
-// Schema for updating a budget (e.g., dates)
-export const UpdateBudgetSchema = z.object({
-  dataInicio: z.string().datetime("Data de início inválida.").optional(),
-  dataFim: z.string().datetime("Data de fim inválida.").optional(),
-});
-
-// Schema for creating a planned budget item
-export const CreatePlannedBudgetItemSchema = z.object({
-  budgetId: z.string().min(1, "ID do orçamento é obrigatório."),
-  groupId: z.string().min(1, "ID do grupo é obrigatório."),
-  categoryType: z.enum(["renda", "despesa", "conta", "poupanca"], {
-    required_error: "Tipo de categoria é obrigatório.",
-  }),
-  nome: z.string().min(1, "Nome do item é obrigatório."),
-  valorPlanejado: z
-    .number()
-    .min(0.01, "Valor planejado deve ser maior que zero."),
-});
-
-// Schema for updating a planned budget item
-export const UpdatePlannedBudgetItemSchema = z.object({
-  categoryType: z
-    .enum(["renda", "despesa", "conta", "poupanca"])
-    .optional(),
-  nome: z.string().min(1, "Nome do item é obrigatório.").optional(),
-  valorPlanejado: z
-    .number()
-    .min(0.01, "Valor planejado deve ser maior que zero.")
-    .optional(),
+// New Schema for accepting group invitations
+export const AcceptGroupInvitationSchema = z.object({
+  groupId: z.string().min(1, "ID do grupo é obrigatório"),
+  token: z.string().min(1, "Token é obrigatório"),
 });

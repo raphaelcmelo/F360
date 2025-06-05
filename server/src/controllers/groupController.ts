@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import Group, { IGroup } from "../models/Group";
 import User, { IUser } from "../models/User";
+import Token from "../models/Token"; // Import Token model
 import { CustomRequest } from "../middleware/authMiddleware";
 import {
   CreateGroupSchema,
@@ -9,6 +10,8 @@ import {
 } from "../schemas";
 import { z } from "zod";
 import mongoose from "mongoose";
+import crypto from "crypto"; // For generating tokens
+import { sendGroupInvitationEmail, sendRegistrationInvitationEmail } from "../utils/emailService"; // Import new email services
 
 // @desc    Create a new group
 // @route   POST /api/groups
@@ -152,37 +155,60 @@ export const inviteMemberToGroup = async (req: CustomRequest, res: Response) => 
 
     const invitedUser = await User.findOne({ email });
 
-    if (!invitedUser) {
-      return res
-        .status(404)
-        .json({ success: false, error: "Usuário a ser convidado não encontrado." });
-    }
+    // Generate a unique token for the invitation
+    const invitationToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(invitationToken)
+      .digest("hex");
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
 
-    // Check if the user is already a member of the group
-    const isAlreadyMember = group.membros.some((member) =>
-      member.userId.equals(invitedUser._id)
-    );
+    if (invitedUser) {
+      // User is already registered
+      const isAlreadyMember = group.membros.some((member) =>
+        member.userId.equals(invitedUser._id)
+      );
 
-    if (isAlreadyMember) {
-      return res.status(400).json({
-        success: false,
-        error: "Este usuário já é membro deste grupo.",
+      if (isAlreadyMember) {
+        return res.status(400).json({
+          success: false,
+          error: "Este usuário já é membro deste grupo.",
+        });
+      }
+
+      // Create a token for registered user to accept the invite
+      await Token.create({
+        userId: invitedUser._id,
+        groupId: group._id,
+        token: hashedToken,
+        type: "groupInvitation",
+        expiresAt,
+      });
+
+      await sendGroupInvitationEmail(email, group.nome, group._id.toString(), invitationToken);
+
+      res.status(200).json({
+        success: true,
+        message: "Convite enviado com sucesso para o usuário registrado.",
+      });
+    } else {
+      // User is not registered, send registration invitation
+      // Create a token linked to the email for registration and group association
+      await Token.create({
+        invitedEmail: email,
+        groupId: group._id,
+        token: hashedToken,
+        type: "groupInvitation",
+        expiresAt,
+      });
+
+      await sendRegistrationInvitationEmail(email, group.nome, group._id.toString(), invitationToken);
+
+      res.status(200).json({
+        success: true,
+        message: "Convite de registro enviado com sucesso para o novo usuário.",
       });
     }
-
-    // Add member to group
-    group.membros.push({ userId: invitedUser._id, role: "member" });
-    await group.save();
-
-    // Add group to user's groups
-    invitedUser.grupos.push({ groupId: group._id, displayName: group.nome });
-    await invitedUser.save();
-
-    res.status(200).json({
-      success: true,
-      message: "Membro convidado com sucesso.",
-      data: { group, invitedUser },
-    });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({

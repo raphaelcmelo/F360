@@ -4,11 +4,6 @@ dotenv.config(); // Ensure environment variables are loaded
 
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000'; // Default if not set
 
-interface UserEmailDetails {
-  email: string;
-  name?: string; // Optional: for personalizing the email
-}
-
 /**
  * Sends a password reset email (logs to console for now).
  * @param userEmail The email address of the user.
@@ -20,38 +15,6 @@ export const sendPasswordResetEmail = async (
 ): Promise<void> => {
   const resetLink = `${CLIENT_URL}/reset-password/${resetToken}`;
 
-  // In a real application, you would use an email sending service here.
-  // For example, using Nodemailer:
-  //
-  // import nodemailer from 'nodemailer';
-  //
-  // const transporter = nodemailer.createTransport({
-  //   host: process.env.EMAIL_HOST,
-  //   port: Number(process.env.EMAIL_PORT),
-  //   secure: process.env.EMAIL_SECURE === 'true', // true for 465, false for other ports
-  //   auth: {
-  //     user: process.env.EMAIL_USER,
-  //     pass: process.env.EMAIL_PASS,
-  //   },
-  // });
-  //
-  // const mailOptions = {
-  //   from: `"Your App Name" <${process.env.EMAIL_FROM || 'noreply@example.com'}>`,
-  //   to: userEmail,
-  //   subject: 'Password Reset Request',
-  //   text: `You requested a password reset. Click this link to reset your password: ${resetLink}`,
-  //   html: `<p>You requested a password reset. Click this link to reset your password: <a href="${resetLink}">${resetLink}</a></p>`,
-  // };
-  //
-  // try {
-  //   await transporter.sendMail(mailOptions);
-  //   console.log('Password reset email sent (simulated) to:', userEmail);
-  // } catch (error) {
-  //   console.error('Error sending password reset email (simulated):', error);
-  //   throw new Error('Could not send password reset email.');
-  // }
-
-  // For now, just log to the console:
   console.log('--- Password Reset Email Simulation ---');
   console.log(`To: ${userEmail}`);
   console.log(`Subject: Password Reset Request`);
@@ -59,6 +22,55 @@ export const sendPasswordResetEmail = async (
   console.log(`Full Reset Link (for testing): ${resetLink}`);
   console.log('--- End of Email Simulation ---');
 
-  // Simulate async operation if needed, though console.log is sync
+  return Promise.resolve();
+};
+
+/**
+ * Sends a group invitation email to an already registered user.
+ * @param userEmail The email address of the invited user.
+ * @param groupName The name of the group.
+ * @param groupId The ID of the group.
+ * @param token The invitation token.
+ */
+export const sendGroupInvitationEmail = async (
+  userEmail: string,
+  groupName: string,
+  groupId: string,
+  token: string
+): Promise<void> => {
+  const acceptLink = `${CLIENT_URL}/accept-group-invite?groupId=${groupId}&token=${token}`;
+
+  console.log('--- Group Invitation Email (Registered User) Simulation ---');
+  console.log(`To: ${userEmail}`);
+  console.log(`Subject: Você foi convidado para o grupo "${groupName}"!`);
+  console.log(`Body: Olá! Você foi convidado para se juntar ao grupo "${groupName}". Clique no link abaixo para aceitar o convite: ${acceptLink}`);
+  console.log(`Full Acceptance Link (for testing): ${acceptLink}`);
+  console.log('--- End of Email Simulation ---');
+
+  return Promise.resolve();
+};
+
+/**
+ * Sends a registration invitation email to an unregistered user.
+ * @param userEmail The email address of the invited user.
+ * @param groupName The name of the group.
+ * @param groupId The ID of the group.
+ * @param token The invitation token.
+ */
+export const sendRegistrationInvitationEmail = async (
+  userEmail: string,
+  groupName: string,
+  groupId: string,
+  token: string
+): Promise<void> => {
+  const registerLink = `${CLIENT_URL}/register?groupId=${groupId}&token=${token}&email=${encodeURIComponent(userEmail)}`;
+
+  console.log('--- Registration Invitation Email (Unregistered User) Simulation ---');
+  console.log(`To: ${userEmail}`);
+  console.log(`Subject: Você foi convidado para o F360 e para o grupo "${groupName}"!`);
+  console.log(`Body: Olá! Você foi convidado para se juntar ao F360 e ao grupo "${groupName}". Por favor, registre-se usando o link abaixo para aceitar o convite: ${registerLink}`);
+  console.log(`Full Registration Link (for testing): ${registerLink}`);
+  console.log('--- End of Email Simulation ---');
+
   return Promise.resolve();
 };
