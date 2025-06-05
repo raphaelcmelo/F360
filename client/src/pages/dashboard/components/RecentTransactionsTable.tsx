@@ -1,4 +1,4 @@
-import { Table, Text, Badge, Skeleton, Group } from "@mantine/core";
+import { Table, Text, Badge, Skeleton } from "@mantine/core";
 import { Transaction } from "../../../types/transaction";
 
 interface RecentTransactionsTableProps {
