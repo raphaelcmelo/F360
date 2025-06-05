@@ -78,6 +78,8 @@ export default function Transactions() {
     },
   });
 
+  const watchedCategory = form.watch("categoria"); // Watch the category field for dynamic filtering
+
   // Fetch user groups on component mount
   useEffect(() => {
     const fetchUserGroups = async () => {
@@ -89,7 +91,8 @@ export default function Transactions() {
         } else {
           notifications.show({
             title: "Atenção",
-            message: "Você não possui grupos. Crie um grupo para gerenciar lançamentos.",
+            message:
+              "Você não possui grupos. Crie um grupo para gerenciar lançamentos.",
             color: "yellow",
           });
           setIsLoading(false); // Stop loading if no groups
@@ -108,7 +111,8 @@ export default function Transactions() {
   }, []);
 
   const fetchTransactionsAndBudget = useCallback(async () => {
-    if (!selectedGroupId) { // Only fetch if a group is selected
+    if (!selectedGroupId) {
+      // Only fetch if a group is selected
       setIsLoading(false);
       return;
     }
@@ -301,12 +305,17 @@ export default function Transactions() {
     (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()
   );
 
+  // Filter available types based on the watched category
   const availableTypes = budget
     ? Array.from(
         new Set(
-          budget.categorias.flatMap((category) =>
-            category.lancamentosPlanejados.map((item: PlannedItem) => item.nome)
-          )
+          budget.categorias
+            .filter((category) => category.tipo === watchedCategory) // Filter by selected category
+            .flatMap((category) =>
+              category.lancamentosPlanejados.map(
+                (item: PlannedItem) => item.nome
+              )
+            )
         )
       ).map((type) => ({ value: type, label: type }))
     : [];
@@ -418,7 +427,9 @@ export default function Transactions() {
             ) : !selectedGroupId ? ( // Show message if no group is selected
               <Table.Tr>
                 <Table.Td colSpan={5} style={{ textAlign: "center" }}>
-                  <Text c="dimmed">Selecione ou crie um grupo para visualizar lançamentos.</Text>
+                  <Text c="dimmed">
+                    Selecione ou crie um grupo para visualizar lançamentos.
+                  </Text>
                 </Table.Td>
               </Table.Tr>
             ) : (
@@ -527,10 +538,10 @@ export default function Transactions() {
                     label="Tipo"
                     required
                     placeholder="Selecione o tipo de lançamento"
-                    data={availableTypes}
+                    data={availableTypes} // Now filtered by watchedCategory
                     searchable
                     clearable
-                    nothingFoundMessage="Nenhum tipo encontrado. Crie em Orçamento."
+                    nothingFoundMessage="Nenhum tipo encontrado para esta categoria. Crie em Orçamento."
                     error={form.formState.errors.tipo?.message}
                     {...field}
                   />
