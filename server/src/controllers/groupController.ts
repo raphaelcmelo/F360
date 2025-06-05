@@ -1,234 +1,304 @@
-import { Request, Response } from 'express';
-import Group from '../models/Group';
-import User from '../models/User';
-import { AuthenticatedRequest, ApiResponse } from '../types';
-import { CreateGroupSchema, InviteMemberSchema, UpdateGroupDisplayNameSchema } from '../schemas';
+import { Request, Response } from "express";
+import Group, { IGroup } from "../models/Group";
+import User, { IUser } from "../models/User";
+import { CustomRequest } from "../middleware/authMiddleware";
+import {
+  CreateGroupSchema,
+  InviteMemberSchema,
+  UpdateGroupDisplayNameSchema,
+} from "../schemas";
+import { z } from "zod";
+import mongoose from "mongoose";
 
-// Create a new group
-export const createGroup = async (req: AuthenticatedRequest, res: Response<ApiResponse>) => {
+// @desc    Create a new group
+// @route   POST /api/groups
+// @access  Private
+export const createGroup = async (req: CustomRequest, res: Response) => {
   try {
     const validatedData = CreateGroupSchema.parse(req.body);
-    const userId = req.user?._id;
     const { nome } = validatedData;
 
-    if (!userId) {
-      return res.status(401).json({ success: false, error: 'User not authenticated.' });
+    if (!req.user) {
+      return res
+        .status(401)
+        .json({ success: false, error: "Usuário não autenticado." });
     }
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found.' });
-    }
-
-    // Check for existing group with the same display name for this user
-    const existingGroupEntry = user.grupos.find(g => g.displayName === nome);
-    if (existingGroupEntry) {
-      return res.status(409).json({ success: false, error: 'Você já possui um grupo com este nome de exibição.' });
-    }
-
-    const newGroup = await Group.create({
-      nome: nome, // The actual group name
-      membros: [userId], // Creator is automatically a member
-      criadoPor: userId,
+    const newGroup: IGroup = await Group.create({
+      nome,
+      criadoPor: req.user.id,
+      membros: [{ userId: req.user.id, role: "admin" }], // Creator is admin
     });
 
-    // Add the new group to the creator's list of groups with its initial display name
-    user.grupos.push({ groupId: newGroup._id, displayName: nome });
-    await user.save();
+    // Add the new group to the creator's groups array
+    await User.findByIdAndUpdate(
+      req.user.id,
+      {
+        $push: {
+          grupos: { groupId: newGroup._id, displayName: newGroup.nome },
+        },
+      },
+      { new: true }
+    );
 
     res.status(201).json({
       success: true,
       data: newGroup,
-      message: 'Group created successfully.'
+      message: "Grupo criado com sucesso.",
     });
   } catch (error: any) {
-    if (error.name === 'ZodError') {
-      return res.status(400).json({ success: false, error: 'Validation error', details: error.errors });
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        error: error.errors,
+        message: "Dados de grupo inválidos.",
+      });
     }
-    console.error('Error creating group:', error);
-    res.status(500).json({ success: false, error: 'Server error creating group.' });
+    console.error("Error creating group:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erro interno do servidor ao criar grupo.",
+    });
   }
 };
 
-// Get all groups a user is a member of, including their custom display names
-export const getUserGroups = async (req: AuthenticatedRequest, res: Response<ApiResponse>) => {
+// @desc    Get all groups a user belongs to
+// @route   GET /api/groups
+// @access  Private
+export const getUserGroups = async (req: CustomRequest, res: Response) => {
   try {
-    const userId = req.user?._id;
-
-    if (!userId) {
-      return res.status(401).json({ success: false, error: 'User not authenticated.' });
+    if (!req.user) {
+      return res
+        .status(401)
+        .json({ success: false, error: "Usuário não autenticado." });
     }
 
-    const user = await User.findById(userId).select('grupos').lean(); // Get user's group entries
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found.' });
-    }
-
-    // Ensure user.grupos is an array before calling map
-    const groupIds = (user.grupos || []).map(g => g.groupId);
-    const groups = await Group.find({ _id: { $in: groupIds } }).populate('membros', 'name email').lean(); // Fetch actual group documents
-
-    // Merge display names from user's groups array into the group objects
-    const groupsWithDisplayNames = groups.map(group => {
-      const userGroupEntry = (user.grupos || []).find(g => g.groupId.equals(group._id));
-      return {
-        ...group,
-        displayName: userGroupEntry ? userGroupEntry.displayName : group.nome // Use user's display name, fallback to group's actual name
-      };
+    // Populate the groups array in the user object
+    const userWithGroups = await User.findById(req.user.id).populate({
+      path: "grupos.groupId",
+      model: "Group",
+      select: "-__v", // Exclude __v field from the populated Group
     });
+
+    if (!userWithGroups) {
+      return res
+        .status(404)
+        .json({ success: false, error: "Usuário não encontrado." });
+    }
+
+    // Filter out any null groupIds that might occur if a group was deleted but not removed from user's groups
+    const userGroups = userWithGroups.grupos.filter(
+      (group) => group.groupId !== null
+    );
 
     res.status(200).json({
       success: true,
-      data: groupsWithDisplayNames,
-      message: 'User groups fetched successfully.'
+      data: userGroups,
+      message: "Grupos do usuário recuperados com sucesso.",
     });
   } catch (error: any) {
-    console.error('Error fetching user groups:', error);
-    res.status(500).json({ success: false, error: 'Server error fetching groups.' });
+    console.error("Error fetching user groups:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erro interno do servidor ao buscar grupos do usuário.",
+    });
   }
 };
 
-// Invite a member to an existing group
-export const inviteMemberToGroup = async (req: AuthenticatedRequest, res: Response<ApiResponse>) => {
+// @desc    Invite a member to a group
+// @route   POST /api/groups/:groupId/invite
+// @access  Private
+export const inviteMemberToGroup = async (req: CustomRequest, res: Response) => {
   try {
     const { groupId } = req.params;
     const validatedData = InviteMemberSchema.parse(req.body);
     const { email } = validatedData;
-    const inviterId = req.user?._id;
 
-    if (!inviterId) {
-      return res.status(401).json({ success: false, error: 'User not authenticated.' });
+    if (!req.user) {
+      return res
+        .status(401)
+        .json({ success: false, error: "Usuário não autenticado." });
     }
 
     const group = await Group.findById(groupId);
 
     if (!group) {
-      return res.status(404).json({ success: false, error: 'Group not found.' });
+      return res
+        .status(404)
+        .json({ success: false, error: "Grupo não encontrado." });
     }
 
-    // Check if the inviter is a member of the group
-    if (!group.membros.includes(inviterId)) {
-      return res.status(403).json({ success: false, error: 'You are not authorized to invite members to this group.' });
+    // Check if the inviting user is an admin of the group
+    const inviterIsAdmin = group.membros.some(
+      (member) =>
+        member.userId.equals(req.user!.id) &&
+        (member.role === "admin" || member.role === "owner")
+    );
+
+    if (!inviterIsAdmin) {
+      return res.status(403).json({
+        success: false,
+        error: "Você não tem permissão para convidar membros para este grupo.",
+      });
     }
 
     const invitedUser = await User.findOne({ email });
 
     if (!invitedUser) {
-      return res.status(404).json({ success: false, error: 'User with this email not found.' });
+      return res
+        .status(404)
+        .json({ success: false, error: "Usuário a ser convidado não encontrado." });
     }
 
-    // Check if the user is already a member of the group (by groupId)
-    if ((invitedUser.grupos || []).some(g => g.groupId.equals(group._id))) {
-      return res.status(400).json({ success: false, error: 'User is already a member of this group.' });
+    // Check if the user is already a member of the group
+    const isAlreadyMember = group.membros.some((member) =>
+      member.userId.equals(invitedUser._id)
+    );
+
+    if (isAlreadyMember) {
+      return res.status(400).json({
+        success: false,
+        error: "Este usuário já é membro deste grupo.",
+      });
     }
 
-    // Add user to group's members
-    group.membros.push(invitedUser._id);
+    // Add member to group
+    group.membros.push({ userId: invitedUser._id, role: "member" });
     await group.save();
 
-    // Add group to user's groups with the group's actual name as default display name
+    // Add group to user's groups
     invitedUser.grupos.push({ groupId: group._id, displayName: group.nome });
     await invitedUser.save();
 
     res.status(200).json({
       success: true,
-      message: `${invitedUser.name} has been added to the group ${group.nome}.`
+      message: "Membro convidado com sucesso.",
+      data: { group, invitedUser },
     });
   } catch (error: any) {
-    if (error.name === 'ZodError') {
-      return res.status(400).json({ success: false, error: 'Validation error', details: error.errors });
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        error: error.errors,
+        message: "Dados de convite inválidos.",
+      });
     }
-    console.error('Error inviting member:', error);
-    res.status(500).json({ success: false, error: 'Server error inviting member.' });
+    console.error("Error inviting member to group:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erro interno do servidor ao convidar membro para o grupo.",
+    });
   }
 };
 
-// New endpoint: Update user's display name for a specific group
-export const updateGroupDisplayName = async (req: AuthenticatedRequest, res: Response<ApiResponse>) => {
+// @desc    Update group display name for a user
+// @route   PUT /api/groups/:groupId/display-name
+// @access  Private
+export const updateGroupDisplayName = async (
+  req: CustomRequest,
+  res: Response
+) => {
   try {
     const { groupId } = req.params;
     const validatedData = UpdateGroupDisplayNameSchema.parse(req.body);
     const { newDisplayName } = validatedData;
-    const userId = req.user?._id;
 
-    if (!userId) {
-      return res.status(401).json({ success: false, error: 'User not authenticated.' });
+    if (!req.user) {
+      return res
+        .status(401)
+        .json({ success: false, error: "Usuário não autenticado." });
     }
 
-    const user = await User.findById(userId);
+    // Find the user and update the displayName for the specific group
+    const user = await User.findById(req.user.id);
+
     if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found.' });
+      return res
+        .status(404)
+        .json({ success: false, error: "Usuário não encontrado." });
     }
 
-    // Check if the new display name conflicts with any other group the user has
-    const existingDisplayNameConflict = (user.grupos || []).some(
-      g => !g.groupId.equals(groupId) && g.displayName === newDisplayName
+    const groupIndex = user.grupos.findIndex((g) =>
+      g.groupId.equals(groupId)
     );
 
-    if (existingDisplayNameConflict) {
-      return res.status(409).json({ success: false, error: 'Você já possui outro grupo com este nome de exibição.' });
+    if (groupIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        error: "Grupo não encontrado nas suas associações.",
+      });
     }
 
-    // Find and update the specific group entry
-    const groupEntry = (user.grupos || []).find(g => g.groupId.equals(groupId));
-
-    if (!groupEntry) {
-      return res.status(404).json({ success: false, error: 'Group not found in user\'s list.' });
-    }
-
-    groupEntry.displayName = newDisplayName;
+    user.grupos[groupIndex].displayName = newDisplayName;
     await user.save();
 
     res.status(200).json({
       success: true,
-      message: 'Nome de exibição do grupo atualizado com sucesso.',
-      data: { groupId, newDisplayName }
+      message: "Nome de exibição do grupo atualizado com sucesso.",
+      data: user.grupos[groupIndex],
     });
   } catch (error: any) {
-    if (error.name === 'ZodError') {
-      return res.status(400).json({ success: false, error: 'Validation error', details: error.errors });
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        error: error.errors,
+        message: "Dados de atualização inválidos.",
+      });
     }
-    console.error('Error updating group display name:', error);
-    res.status(500).json({ success: false, error: 'Server error updating group display name.' });
+    console.error("Error updating group display name:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erro interno do servidor ao atualizar nome de exibição do grupo.",
+    });
   }
 };
 
-// Delete a group
-export const deleteGroup = async (req: AuthenticatedRequest, res: Response<ApiResponse>) => {
+// @desc    Delete a group
+// @route   DELETE /api/groups/:groupId
+// @access  Private
+export const deleteGroup = async (req: CustomRequest, res: Response) => {
   try {
     const { groupId } = req.params;
-    const userId = req.user?._id;
 
-    if (!userId) {
-      return res.status(401).json({ success: false, error: 'User not authenticated.' });
+    if (!req.user) {
+      return res
+        .status(401)
+        .json({ success: false, error: "Usuário não autenticado." });
     }
 
     const group = await Group.findById(groupId);
 
     if (!group) {
-      return res.status(404).json({ success: false, error: 'Group not found.' });
+      return res
+        .status(404)
+        .json({ success: false, error: "Grupo não encontrado." });
     }
 
-    // Only the creator can delete the group
-    if (!group.criadoPor.equals(userId)) {
-      return res.status(403).json({ success: false, error: 'You are not authorized to delete this group.' });
+    // Check if the user is the creator of the group
+    if (!group.criadoPor.equals(req.user.id)) {
+      return res.status(403).json({
+        success: false,
+        error: "Você não tem permissão para deletar este grupo.",
+      });
     }
 
-    // Remove the group reference from all members' user documents
+    // Remove group from all members' group lists
     await User.updateMany(
-      { 'grupos.groupId': groupId },
+      { "grupos.groupId": groupId },
       { $pull: { grupos: { groupId: groupId } } }
     );
 
-    // Delete the group document
-    await Group.deleteOne({ _id: groupId });
+    await group.deleteOne(); // Use deleteOne() instead of remove()
 
     res.status(200).json({
       success: true,
-      message: 'Group deleted successfully.'
+      message: "Grupo deletado com sucesso.",
     });
   } catch (error: any) {
-    console.error('Error deleting group:', error);
-    res.status(500).json({ success: false, error: 'Server error deleting group.' });
+    console.error("Error deleting group:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erro interno do servidor ao deletar grupo.",
+    });
   }
 };

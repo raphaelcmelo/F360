@@ -1,134 +1,69 @@
 import { z } from "zod";
 
-export const CreateUserSchema = z.object({
-  name: z
-    .string()
-    .min(3, "O nome deve ter pelo menos 3 caracteres.")
-    .max(50, "O nome não pode exceder 50 caracteres."),
-  email: z.string().email("Formato de e-mail inválido."),
-  password: z
-    .string()
-    .min(8, "A senha deve ter pelo menos 8 caracteres.")
-    .max(100, "A senha não pode exceder 100 caracteres."),
+export const CreateTransactionSchema = z.object({
+  grupoId: z.string(),
+  data: z.string().datetime(), // Expect ISO string from frontend
+  categoria: z.enum(["renda", "despesa", "conta", "poupanca"]),
+  tipo: z.string().min(1, "Tipo é obrigatório"),
+  valor: z.number().min(0.01, "O valor deve ser maior que zero"),
 });
 
-export const LoginSchema = z.object({
-  email: z.string().email("Formato de e-mail inválido."),
-  password: z.string().min(1, "A senha é obrigatória."),
+export const UpdateTransactionSchema = z.object({
+  data: z.string().datetime().optional(),
+  categoria: z.enum(["renda", "despesa", "conta", "poupanca"]).optional(),
+  tipo: z.string().min(1, "Tipo é obrigatório").optional(),
+  valor: z.number().min(0.01, "O valor deve ser maior que zero").optional(),
 });
 
-export const ForgotPasswordSchema = z.object({
-  email: z.string().email("Formato de e-mail inválido."),
-});
-
-export const ResetPasswordSchema = z
-  .object({
-    password: z
-      .string()
-      .min(8, "A nova senha deve ter pelo menos 8 caracteres.")
-      .max(100, "A nova senha não pode exceder 100 caracteres."),
-    confirmPassword: z
-      .string()
-      .min(8, "A confirmação da senha deve ter pelo menos 8 caracteres.")
-      .max(100, "A confirmação da senha não pode exceder 100 caracteres."),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "As senhas não coincidem.",
-    path: ["confirmPassword"],
-  });
-
+// Schema for creating a new group
 export const CreateGroupSchema = z.object({
-  nome: z
-    .string()
-    .min(3, "O nome do grupo deve ter pelo menos 3 caracteres.")
-    .max(100, "O nome do grupo não pode exceder 100 caracteres."),
+  nome: z.string().min(1, "O nome do grupo é obrigatório."),
 });
 
+// Schema for updating group display name
+export const UpdateGroupDisplayNameSchema = z.object({
+  newDisplayName: z.string().min(1, "O novo nome de exibição é obrigatório."),
+});
+
+// Schema for inviting a member to a group
 export const InviteMemberSchema = z.object({
   email: z.string().email("Formato de e-mail inválido."),
 });
 
-export const UpdateGroupDisplayNameSchema = z.object({
-  newDisplayName: z
-    .string()
-    .min(3, "O nome de exibição deve ter pelo menos 3 caracteres.")
-    .max(100, "O nome de exibição não pode exceder 100 caracteres."),
-});
-
+// Schema for creating a budget
 export const CreateBudgetSchema = z.object({
-  grupoId: z.string().min(1, "O ID do grupo é obrigatório."),
-  dataInicio: z.string().refine((val) => !isNaN(new Date(val).getTime()), {
-    message: "Formato de data de início inválido.",
-  }),
-  dataFim: z.string().refine((val) => !isNaN(new Date(val).getTime()), {
-    message: "Formato de data de fim inválido.",
-  }),
-}).refine((data) => new Date(data.dataFim) >= new Date(data.dataInicio), {
-  message: "A data de fim não pode ser anterior à data de início.",
-  path: ["dataFim"],
+  grupoId: z.string().min(1, "ID do grupo é obrigatório."),
+  dataInicio: z.string().datetime("Data de início inválida."),
+  dataFim: z.string().datetime("Data de fim inválida."),
 });
 
+// Schema for updating a budget (e.g., dates)
+export const UpdateBudgetSchema = z.object({
+  dataInicio: z.string().datetime("Data de início inválida.").optional(),
+  dataFim: z.string().datetime("Data de fim inválida.").optional(),
+});
+
+// Schema for creating a planned budget item
 export const CreatePlannedBudgetItemSchema = z.object({
-  budgetId: z.string().min(1, "O ID do orçamento é obrigatório."),
-  groupId: z.string().min(1, "O ID do grupo é obrigatório."),
-  categoryType: z.enum(['renda', 'despesa', 'conta', 'poupanca'], {
-    errorMap: () => ({ message: "Tipo de categoria inválido." }),
+  budgetId: z.string().min(1, "ID do orçamento é obrigatório."),
+  groupId: z.string().min(1, "ID do grupo é obrigatório."),
+  categoryType: z.enum(["renda", "despesa", "conta", "poupanca"], {
+    required_error: "Tipo de categoria é obrigatório.",
   }),
-  nome: z
-    .string()
-    .min(1, "O nome do item planejado deve ter pelo menos 1 caractere.")
-    .max(200, "O nome do item planejado não pode exceder 200 caracteres."),
+  nome: z.string().min(1, "Nome do item é obrigatório."),
   valorPlanejado: z
     .number()
-    .min(0, "O valor planejado não pode ser negativo."),
+    .min(0.01, "Valor planejado deve ser maior que zero."),
 });
 
+// Schema for updating a planned budget item
 export const UpdatePlannedBudgetItemSchema = z.object({
-  categoryType: z.enum(['renda', 'despesa', 'conta', 'poupanca'], {
-    errorMap: () => ({ message: "Tipo de categoria inválido." }),
-  }).optional(),
-  nome: z
-    .string()
-    .min(1, "O nome do item planejado deve ter pelo menos 1 caractere.")
-    .max(200, "O nome do item planejado não pode exceder 200 caracteres.")
+  categoryType: z
+    .enum(["renda", "despesa", "conta", "poupanca"])
     .optional(),
+  nome: z.string().min(1, "Nome do item é obrigatório.").optional(),
   valorPlanejado: z
     .number()
-    .min(0, "O valor planejado não pode ser negativo.")
-    .optional(),
-});
-
-export const CreateTransactionSchema = z.object({
-  grupoId: z.string().min(1, "O ID do grupo é obrigatório."),
-  data: z.string().refine((val) => !isNaN(new Date(val).getTime()), {
-    message: "Formato de data inválido.",
-  }),
-  categoria: z.enum(['renda', 'despesa', 'conta', 'poupanca'], {
-    errorMap: () => ({ message: "Tipo de categoria inválido." }),
-  }),
-  tipo: z
-    .string()
-    .min(1, "O tipo de lançamento é obrigatório.")
-    .max(200, "O tipo de lançamento não pode exceder 200 caracteres."),
-  valor: z
-    .number()
-    .min(0.01, "O valor deve ser maior que zero."),
-});
-
-export const UpdateTransactionSchema = z.object({
-  data: z.string().refine((val) => !isNaN(new Date(val).getTime()), {
-    message: "Formato de data inválido.",
-  }).optional(),
-  categoria: z.enum(['renda', 'despesa', 'conta', 'poupanca'], {
-    errorMap: () => ({ message: "Tipo de categoria inválido." }),
-  }).optional(),
-  tipo: z
-    .string()
-    .min(1, "O tipo de lançamento é obrigatório.")
-    .max(200, "O tipo de lançamento não pode exceder 200 caracteres.")
-    .optional(),
-  valor: z
-    .number()
-    .min(0.01, "O valor deve ser maior que zero.")
+    .min(0.01, "Valor planejado deve ser maior que zero.")
     .optional(),
 });

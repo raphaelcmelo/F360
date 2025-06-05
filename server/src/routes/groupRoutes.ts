@@ -4,23 +4,15 @@ import {
   getUserGroups,
   inviteMemberToGroup,
   updateGroupDisplayName,
-  deleteGroup,
+  deleteGroup, // Import deleteGroup
 } from "../controllers/groupController";
-import { authenticateToken } from "../middleware/auth";
+import { protect } from "../middleware/authMiddleware";
 
 const router = Router();
 
-router
-  .route("/")
-  .post(authenticateToken, createGroup)
-  .get(authenticateToken, getUserGroups);
-
-router.route("/:groupId/invite").post(authenticateToken, inviteMemberToGroup);
-
-router
-  .route("/:groupId/display-name")
-  .put(authenticateToken, updateGroupDisplayName);
-
-router.route("/:groupId").delete(authenticateToken, deleteGroup);
+router.route("/").post(protect, createGroup).get(protect, getUserGroups);
+router.post("/:groupId/invite", protect, inviteMemberToGroup);
+router.put("/:groupId/display-name", protect, updateGroupDisplayName);
+router.delete("/:groupId", protect, deleteGroup); // Add delete route
 
 export default router;

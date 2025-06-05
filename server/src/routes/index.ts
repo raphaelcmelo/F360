@@ -7,15 +7,11 @@ import {
   resetPassword,
   logout,
 } from "../controllers/authController";
-import {
-  createGroup,
-  getUserGroups,
-  inviteMemberToGroup,
-} from "../controllers/groupController"; // Import group controllers
 import { protect } from "../middleware/authMiddleware";
 import budgetRoutes from "./budgetRoutes"; // Import budget routes
 import budgetItemRoutes from "./budgetItemRoutes"; // Import budget item routes
 import transactionRoutes from "./transactionRoutes"; // Import transaction routes
+import groupRoutes from "./groupRoutes"; // Import group routes
 
 const router = Router();
 
@@ -28,9 +24,7 @@ router.post("/auth/logout", protect, logout); // Protect logout if it requires a
 router.get("/auth/profile", protect, getProfile);
 
 // Group routes
-router.post("/groups", protect, createGroup);
-router.get("/groups", protect, getUserGroups);
-router.post("/groups/:groupId/invite", protect, inviteMemberToGroup);
+router.use("/groups", groupRoutes); // Use group routes
 
 // Budget routes
 router.use("/budgets", budgetRoutes);

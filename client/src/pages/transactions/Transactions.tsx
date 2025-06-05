@@ -14,11 +14,13 @@ import {
   Modal,
   Loader,
   Center,
+  Flex,
 } from "@mantine/core";
 import { useForm, FormProvider, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { DatePickerInput } from "@mantine/dates";
+import { useDisclosure } from "@mantine/hooks";
 import { motion } from "framer-motion";
 import {
   IconPlus,
@@ -27,6 +29,8 @@ import {
   IconRefresh,
   IconSearch,
   IconFilter,
+  IconEdit,
+  IconTrash,
 } from "@tabler/icons-react";
 import {
   transactionApi,
@@ -58,6 +62,16 @@ const transactionSchema = z.object({
 
 type TransactionFormValues = z.infer<typeof transactionSchema>;
 
+// Define the schema for updating transaction (all fields optional)
+const updateTransactionSchema = z.object({
+  data: z.date().optional(),
+  categoria: z.enum(["renda", "despesa", "conta", "poupanca"]).optional(),
+  tipo: z.string().min(1, "Tipo é obrigatório").optional(),
+  valor: z.number().min(0.01, "O valor deve ser maior que zero").optional(),
+});
+
+type UpdateTransactionFormValues = z.infer<typeof updateTransactionSchema>;
+
 export default function Transactions() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null); // Initialize as null
   const [userGroups, setUserGroups] = useState<UserGroup[]>([]); // State to store user's groups
@@ -67,6 +81,16 @@ export default function Transactions() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [budget, setBudget] = useState<BudgetType | null>(null);
+
+  // Modals for editing and deleting transactions
+  const [editModalOpened, { open: openEditModal, close: closeEditModal }] =
+    useDisclosure(false);
+  const [
+    deleteModalOpened,
+    { open: openDeleteModal, close: closeDeleteModal },
+  ] = useDisclosure(false);
+  const [selectedTransaction, setSelectedTransaction] =
+    useState<Transaction | null>(null); // Transaction currently being edited or deleted
 
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionSchema),
@@ -78,7 +102,18 @@ export default function Transactions() {
     },
   });
 
+  const editForm = useForm<UpdateTransactionFormValues>({
+    resolver: zodResolver(updateTransactionSchema),
+    defaultValues: {
+      data: undefined,
+      categoria: undefined,
+      tipo: "",
+      valor: undefined,
+    },
+  });
+
   const watchedCategory = form.watch("categoria"); // Watch the category field for dynamic filtering
+  const watchedEditCategory = editForm.watch("categoria"); // Watch the category field for dynamic filtering in edit modal
 
   // Fetch user groups on component mount
   useEffect(() => {
@@ -292,6 +327,83 @@ export default function Transactions() {
     }
   };
 
+  const handleEditClick = (transaction: Transaction) => {
+    setSelectedTransaction(transaction);
+    editForm.reset({
+      data: new Date(transaction.data),
+      categoria: transaction.categoria,
+      tipo: transaction.tipo,
+      valor: transaction.valor,
+    });
+    openEditModal();
+  };
+
+  const handleUpdateTransaction = async (values: UpdateTransactionFormValues) => {
+    if (!selectedTransaction) return;
+
+    try {
+      const updates = {
+        ...values,
+        data: values.data ? values.data.toISOString() : undefined, // Convert Date to ISO string
+      };
+
+      const updatedTransaction = await transactionApi.updateTransaction(
+        selectedTransaction._id,
+        updates
+      );
+
+      setTransactions((prev) =>
+        prev.map((t) =>
+          t._id === updatedTransaction._id ? updatedTransaction : t
+        )
+      );
+      closeEditModal();
+      setSelectedTransaction(null);
+      notifications.show({
+        title: "Sucesso",
+        message: "Lançamento atualizado com sucesso!",
+        color: "green",
+      });
+    } catch (error) {
+      console.error("Error updating transaction:", error);
+      notifications.show({
+        title: "Erro",
+        message: "Não foi possível atualizar o lançamento.",
+        color: "red",
+      });
+    }
+  };
+
+  const handleDeleteClick = (transaction: Transaction) => {
+    setSelectedTransaction(transaction);
+    openDeleteModal();
+  };
+
+  const handleConfirmDeleteTransaction = async () => {
+    if (!selectedTransaction) return;
+
+    try {
+      await transactionApi.deleteTransaction(selectedTransaction._id);
+      setTransactions((prev) =>
+        prev.filter((t) => t._id !== selectedTransaction._id)
+      );
+      closeDeleteModal();
+      setSelectedTransaction(null);
+      notifications.show({
+        title: "Sucesso",
+        message: "Lançamento excluído com sucesso!",
+        color: "green",
+      });
+    } catch (error) {
+      console.error("Error deleting transaction:", error);
+      notifications.show({
+        title: "Erro",
+        message: "Não foi possível excluir o lançamento.",
+        color: "red",
+      });
+    }
+  };
+
   const filteredTransactions = transactions.filter((transaction) => {
     const matchesSearch = transaction.tipo
       .toLowerCase()
@@ -305,12 +417,27 @@ export default function Transactions() {
     (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()
   );
 
-  // Filter available types based on the watched category
-  const availableTypes = budget
+  // Filter available types based on the watched category for new transaction form
+  const availableTypesNew = budget
     ? Array.from(
         new Set(
           budget.categorias
             .filter((category) => category.tipo === watchedCategory) // Filter by selected category
+            .flatMap((category) =>
+              category.lancamentosPlanejados.map(
+                (item: PlannedItem) => item.nome
+              )
+            )
+        )
+      ).map((type) => ({ value: type, label: type }))
+    : [];
+
+  // Filter available types based on the watched category for edit transaction form
+  const availableTypesEdit = budget
+    ? Array.from(
+        new Set(
+          budget.categorias
+            .filter((category) => category.tipo === watchedEditCategory) // Filter by selected category
             .flatMap((category) =>
               category.lancamentosPlanejados.map(
                 (item: PlannedItem) => item.nome
@@ -404,12 +531,13 @@ export default function Transactions() {
               <Table.Th>Tipo</Table.Th>
               <Table.Th>Criado por</Table.Th>
               <Table.Th style={{ textAlign: "right" }}>Valor</Table.Th>
+              <Table.Th style={{ textAlign: "center" }}>Ações</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             {isLoading ? (
               <Table.Tr>
-                <Table.Td colSpan={5}>
+                <Table.Td colSpan={6}>
                   <Center>
                     <Loader size="sm" />
                     <Text ml="sm" c="dimmed">
@@ -420,13 +548,13 @@ export default function Transactions() {
               </Table.Tr>
             ) : sortedTransactions.length === 0 && selectedGroupId ? ( // Show "Nenhum lançamento" only if a group is selected
               <Table.Tr>
-                <Table.Td colSpan={5} style={{ textAlign: "center" }}>
+                <Table.Td colSpan={6} style={{ textAlign: "center" }}>
                   <Text c="dimmed">Nenhum lançamento encontrado</Text>
                 </Table.Td>
               </Table.Tr>
             ) : !selectedGroupId ? ( // Show message if no group is selected
               <Table.Tr>
-                <Table.Td colSpan={5} style={{ textAlign: "center" }}>
+                <Table.Td colSpan={6} style={{ textAlign: "center" }}>
                   <Text c="dimmed">
                     Selecione ou crie um grupo para visualizar lançamentos.
                   </Text>
@@ -474,6 +602,28 @@ export default function Transactions() {
                       })}
                     </Text>
                   </Table.Td>
+                  <Table.Td style={{ textAlign: "center" }}>
+                    <Flex gap="xs" justify="center">
+                      <ActionIcon
+                        variant="subtle"
+                        color="gray"
+                        size="sm"
+                        onClick={() => handleEditClick(transaction)}
+                        aria-label="Editar lançamento"
+                      >
+                        <IconEdit size={14} />
+                      </ActionIcon>
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        size="sm"
+                        onClick={() => handleDeleteClick(transaction)}
+                        aria-label="Excluir lançamento"
+                      >
+                        <IconTrash size={14} />
+                      </ActionIcon>
+                    </Flex>
+                  </Table.Td>
                 </Table.Tr>
               ))
             )}
@@ -481,6 +631,7 @@ export default function Transactions() {
         </Table>
       </Paper>
 
+      {/* Add New Transaction Modal */}
       <Modal
         opened={isModalOpen}
         onClose={() => {
@@ -489,6 +640,7 @@ export default function Transactions() {
         }}
         title="Novo Lançamento"
         size="md"
+        centered
       >
         <FormProvider {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)}>
@@ -538,7 +690,7 @@ export default function Transactions() {
                     label="Tipo"
                     required
                     placeholder="Selecione o tipo de lançamento"
-                    data={availableTypes} // Now filtered by watchedCategory
+                    data={availableTypesNew} // Now filtered by watchedCategory
                     searchable
                     clearable
                     nothingFoundMessage="Nenhum tipo encontrado para esta categoria. Crie em Orçamento."
@@ -568,6 +720,120 @@ export default function Transactions() {
             </Stack>
           </form>
         </FormProvider>
+      </Modal>
+
+      {/* Edit Transaction Modal */}
+      <Modal
+        opened={editModalOpened}
+        onClose={closeEditModal}
+        title="Editar Lançamento"
+        size="md"
+        centered
+      >
+        {selectedTransaction && (
+          <FormProvider {...editForm}>
+            <form onSubmit={editForm.handleSubmit(handleUpdateTransaction)}>
+              <Stack>
+                <Controller
+                  name="data"
+                  control={editForm.control}
+                  render={({ field }) => (
+                    <DatePickerInput
+                      label="Data"
+                      required
+                      valueFormat="DD/MM/YYYY"
+                      locale="pt-br"
+                      placeholder="Selecione a data"
+                      error={editForm.formState.errors.data?.message}
+                      {...field}
+                      value={field.value ? new Date(field.value) : null}
+                      onChange={(val) => field.onChange(val)}
+                    />
+                  )}
+                />
+
+                <Controller
+                  name="categoria"
+                  control={editForm.control}
+                  render={({ field }) => (
+                    <Select
+                      label="Categoria"
+                      required
+                      data={[
+                        { value: "renda", label: "Receita" },
+                        { value: "despesa", label: "Despesa" },
+                        { value: "conta", label: "Conta" },
+                        { value: "poupanca", label: "Poupança" },
+                      ]}
+                      error={editForm.formState.errors.categoria?.message}
+                      {...field}
+                    />
+                  )}
+                />
+
+                <Controller
+                  name="tipo"
+                  control={editForm.control}
+                  render={({ field }) => (
+                    <Select
+                      label="Tipo"
+                      required
+                      placeholder="Selecione o tipo de lançamento"
+                      data={availableTypesEdit}
+                      searchable
+                      clearable
+                      nothingFoundMessage="Nenhum tipo encontrado para esta categoria. Crie em Orçamento."
+                      error={editForm.formState.errors.tipo?.message}
+                      {...field}
+                    />
+                  )}
+                />
+
+                <Controller
+                  name="valor"
+                  control={editForm.control}
+                  render={({ field }) => (
+                    <CurrencyInput
+                      label="Valor"
+                      required
+                      error={editForm.formState.errors.valor?.message}
+                      value={field.value}
+                      onChange={(val) => field.onChange(val)}
+                    />
+                  )}
+                />
+
+                <Button type="submit" fullWidth mt="md">
+                  Salvar Alterações
+                </Button>
+              </Stack>
+            </form>
+          </FormProvider>
+        )}
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        opened={deleteModalOpened}
+        onClose={closeDeleteModal}
+        title="Confirmar Exclusão"
+        centered
+      >
+        <Text>
+          Tem certeza de que deseja excluir o lançamento "
+          <b>{selectedTransaction?.tipo}</b>" (R${" "}
+          {selectedTransaction?.valor.toLocaleString("pt-BR", {
+            minimumFractionDigits: 2,
+          })})? Esta ação não pode ser desfeita.
+        </Text>
+        <Group justify="flex-end" mt="md">
+          <Button variant="default" onClick={closeDeleteModal}>
+            Cancelar
+          </Button>
+          <Button color="red" onClick={handleConfirmDeleteTransaction}>
+            Excluir
+          </Button>
+        </Group>
       </Modal>
     </motion.div>
   );

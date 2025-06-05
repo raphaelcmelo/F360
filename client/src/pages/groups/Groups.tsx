@@ -1,356 +1,393 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useCallback } from "react";
 import {
-  Card,
+  Paper,
   Text,
-  Button,
   Group,
-  Stack,
-  Modal,
-  TextInput,
+  Button,
   ActionIcon,
   Menu,
-  Badge,
-  Paper,
+  Table,
+  TextInput,
+  Stack,
+  Modal,
+  Loader,
+  Center,
+  Flex,
 } from "@mantine/core";
-import { useForm } from "@mantine/form";
-import { notifications } from "@mantine/notifications";
+import { useForm, Controller } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useDisclosure } from "@mantine/hooks";
 import { motion } from "framer-motion";
 import {
   IconPlus,
   IconDotsVertical,
-  IconTrash,
+  IconDownload,
+  IconRefresh,
   IconEdit,
-  IconUsers,
-  IconChartBar,
+  IconTrash,
+  IconUserPlus,
 } from "@tabler/icons-react";
-import { groupApi } from "../../services/api"; // Import groupApi
-import { Group as GroupType } from "../../types/group"; // Use GroupType from group.ts
-import { useAuth } from "../../contexts/AuthContext"; // Import useAuth
+import { groupApi } from "../../services/api";
+import { Group as UserGroup } from "../../types/group";
+import { notifications } from "@mantine/notifications";
+
+// Schema for creating a new group
+const createGroupSchema = z.object({
+  nome: z.string().min(1, "O nome do grupo é obrigatório"),
+});
+
+type CreateGroupFormValues = z.infer<typeof createGroupSchema>;
+
+// Schema for inviting a member
+const inviteMemberSchema = z.object({
+  email: z.string().email("Formato de e-mail inválido"),
+});
+
+type InviteMemberFormValues = z.infer<typeof inviteMemberSchema>;
 
 export default function Groups() {
-  const navigate = useNavigate();
-  const { checkAuth } = useAuth(); // Get checkAuth from AuthContext
-  const [groups, setGroups] = useState<GroupType[]>([]);
+  const [groups, setGroups] = useState<UserGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [editingGroup, setEditingGroup] = useState<GroupType | null>(null);
 
-  const form = useForm({
-    initialValues: {
+  // Modals
+  const [createModalOpened, { open: openCreateModal, close: closeCreateModal }] =
+    useDisclosure(false);
+  const [inviteModalOpened, { open: openInviteModal, close: closeInviteModal }] =
+    useDisclosure(false);
+  const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] =
+    useDisclosure(false);
+
+  const [selectedGroup, setSelectedGroup] = useState<UserGroup | null>(null);
+
+  // Forms
+  const createForm = useForm<CreateGroupFormValues>({
+    resolver: zodResolver(createGroupSchema),
+    defaultValues: {
       nome: "",
-    },
-    validate: {
-      nome: (value) =>
-        value.length >= 3 ? null : "Nome deve ter pelo menos 3 caracteres",
     },
   });
 
-  useEffect(() => {
-    fetchGroups();
-  }, []);
+  const inviteForm = useForm<InviteMemberFormValues>({
+    resolver: zodResolver(inviteMemberSchema),
+    defaultValues: {
+      email: "",
+    },
+  });
 
-  const fetchGroups = async () => {
+  const fetchGroups = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const data = await groupApi.getUserGroups(); // Use real API
-      setGroups(data);
+      const fetchedGroups = await groupApi.getUserGroups();
+      setGroups(fetchedGroups);
     } catch (error) {
       console.error("Error fetching groups:", error);
       notifications.show({
         title: "Erro",
-        message: "Não foi possível carregar os grupos",
+        message: "Não foi possível carregar seus grupos.",
         color: "red",
       });
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const handleCreateGroup = async (values: typeof form.values) => {
+  useEffect(() => {
+    fetchGroups();
+  }, [fetchGroups]);
+
+  const handleCreateGroup = async (values: CreateGroupFormValues) => {
     try {
-      await groupApi.createGroup(values.nome); // Use real API
-
+      const newGroup = await groupApi.createGroup(values.nome);
+      // The API returns the GroupType, but the user's groups array stores a different structure
+      // We need to refetch or manually update the user's groups in AuthContext if we want to reflect it immediately
+      // For now, let's refetch all groups to ensure consistency
       notifications.show({
         title: "Sucesso",
-        message: "Grupo criado com sucesso",
+        message: `Grupo "${newGroup.nome}" criado com sucesso!`,
         color: "green",
       });
-
-      setCreateModalOpen(false);
-      form.reset();
-      await fetchGroups(); // Update groups in this component
-      await checkAuth(); // Re-fetch user data in AuthContext to update groups globally
-    } catch (error: any) {
+      closeCreateModal();
+      createForm.reset();
+      fetchGroups(); // Re-fetch groups to update the list
+    } catch (error) {
       console.error("Error creating group:", error);
       notifications.show({
         title: "Erro",
-        message:
-          error.response?.data?.error || "Não foi possível criar o grupo",
+        message: "Não foi possível criar o grupo.",
         color: "red",
       });
     }
   };
 
-  const handleEditGroup = async (values: typeof form.values) => {
-    if (!editingGroup) return;
-    try {
-      await groupApi.updateGroupDisplayName(editingGroup._id, values.nome); // Use real API
+  const handleInviteMemberClick = (group: UserGroup) => {
+    setSelectedGroup(group);
+    inviteForm.reset();
+    openInviteModal();
+  };
 
+  const handleInviteMember = async (values: InviteMemberFormValues) => {
+    if (!selectedGroup) return;
+
+    try {
+      await groupApi.inviteMember(selectedGroup._id, values.email);
       notifications.show({
         title: "Sucesso",
-        message: "Nome de exibição do grupo atualizado com sucesso",
+        message: `Convite enviado para ${values.email} no grupo "${selectedGroup.displayName || selectedGroup.nome}"!`,
         color: "green",
       });
-
-      setEditingGroup(null);
-      form.reset();
-      await fetchGroups(); // Update groups in this component
-      await checkAuth(); // Re-fetch user data in AuthContext to update groups globally
+      closeInviteModal();
+      inviteForm.reset();
     } catch (error: any) {
-      console.error("Error updating group:", error);
+      console.error("Error inviting member:", error);
       notifications.show({
         title: "Erro",
         message:
-          error.response?.data?.error || "Não foi possível atualizar o grupo",
+          error.response?.data?.error || "Não foi possível enviar o convite.",
         color: "red",
       });
     }
   };
 
-  const handleDeleteGroup = async (groupId: string) => {
-    try {
-      await groupApi.deleteGroup(groupId); // Use real API
+  const handleDeleteGroupClick = (group: UserGroup) => {
+    setSelectedGroup(group);
+    openDeleteModal();
+  };
 
+  const handleConfirmDeleteGroup = async () => {
+    if (!selectedGroup) return;
+
+    try {
+      await groupApi.deleteGroup(selectedGroup._id);
+      setGroups((prev) => prev.filter((g) => g._id !== selectedGroup._id));
       notifications.show({
         title: "Sucesso",
-        message: "Grupo excluído com sucesso",
+        message: `Grupo "${selectedGroup.displayName || selectedGroup.nome}" excluído com sucesso!`,
         color: "green",
       });
-
-      await fetchGroups(); // Update groups in this component
-      await checkAuth(); // Re-fetch user data in AuthContext to update groups globally
+      closeDeleteModal();
+      setSelectedGroup(null);
     } catch (error: any) {
       console.error("Error deleting group:", error);
       notifications.show({
         title: "Erro",
         message:
-          error.response?.data?.error || "Não foi possível excluir o grupo",
+          error.response?.data?.error || "Não foi possível excluir o grupo.",
         color: "red",
       });
     }
   };
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-      },
-    },
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-    },
-  };
-
   return (
-    <Stack className="page-transition">
+    <motion.div
+      className="page-transition"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+    >
       <Group justify="space-between" mb="xl">
         <Text size="xl" fw={700}>
-          Meus Grupos Financeiros
+          Meus Grupos
         </Text>
-        <Button
-          leftSection={<IconPlus size={16} />}
-          onClick={() => setCreateModalOpen(true)}
-        >
-          Novo Grupo
-        </Button>
+        <Group>
+          <Button
+            variant="filled"
+            leftSection={<IconPlus size={16} />}
+            onClick={openCreateModal}
+          >
+            Novo Grupo
+          </Button>
+
+          <Button
+            variant="light"
+            leftSection={<IconRefresh size={16} />}
+            onClick={fetchGroups}
+            loading={isLoading}
+          >
+            Atualizar
+          </Button>
+
+          <Menu shadow="md" width={200} position="bottom-end">
+            <Menu.Target>
+              <ActionIcon variant="light" size="lg" radius="md">
+                <IconDotsVertical size={16} />
+              </ActionIcon>
+            </Menu.Target>
+
+            <Menu.Dropdown>
+              <Menu.Item leftSection={<IconDownload size={14} />}>
+                Exportar dados
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+        </Group>
       </Group>
 
-      {isLoading ? (
-        <Stack>
-          {[1, 2, 3].map((n) => (
-            <Paper key={n} p="md" withBorder>
-              <Group justify="space-between">
-                <Stack gap="xs">
-                  <div
-                    style={{
-                      width: 150,
-                      height: 24,
-                      background: "#f1f3f5",
-                      borderRadius: 4,
-                    }}
-                  />
-                  <div
-                    style={{
-                      width: 100,
-                      height: 16,
-                      background: "#f1f3f5",
-                      borderRadius: 4,
-                    }}
-                  />
-                </Stack>
-                <div
-                  style={{
-                    width: 40,
-                    height: 40,
-                    background: "#f1f3f5",
-                    borderRadius: 4,
-                  }}
-                />
-              </Group>
-            </Paper>
-          ))}
-        </Stack>
-      ) : (
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-        >
-          {groups.length > 0 ? (
-            <Stack gap="md">
-              {groups.map((group) => (
-                <motion.div key={group._id} variants={itemVariants}>
-                  <Card withBorder>
-                    <Group justify="space-between" wrap="nowrap">
-                      <Stack gap="xs">
-                        <Text size="lg" fw={500}>
-                          {group.displayName || group.nome}{" "}
-                          {/* Use displayName if available, fallback to nome */}
-                        </Text>
-                        <Group gap="xs">
-                          <Badge
-                            leftSection={<IconUsers size={12} />}
-                            variant="light"
-                            color="blue"
-                          >
-                            {Array.isArray(group.membros)
-                              ? group.membros.length
-                              : 0}{" "}
-                            membros
-                          </Badge>
-                          <Badge
-                            leftSection={<IconChartBar size={12} />}
-                            variant="light"
-                            color="green"
-                          >
-                            {group.orcamentos.length} orçamentos
-                          </Badge>
-                        </Group>
-                      </Stack>
+      <Paper p="md" radius="md" withBorder mb="xl">
+        <Table striped highlightOnHover>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Nome do Grupo</Table.Th>
+              <Table.Th>Nome de Exibição</Table.Th>
+              <Table.Th>Membros</Table.Th>
+              <Table.Th>Criado Em</Table.Th>
+              <Table.Th style={{ textAlign: "center" }}>Ações</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {isLoading ? (
+              <Table.Tr>
+                <Table.Td colSpan={5}>
+                  <Center>
+                    <Loader size="sm" />
+                    <Text ml="sm" c="dimmed">
+                      Carregando...
+                    </Text>
+                  </Center>
+                </Table.Td>
+              </Table.Tr>
+            ) : groups.length === 0 ? (
+              <Table.Tr>
+                <Table.Td colSpan={5} style={{ textAlign: "center" }}>
+                  <Text c="dimmed">Nenhum grupo encontrado.</Text>
+                </Table.Td>
+              </Table.Tr>
+            ) : (
+              groups.map((group) => (
+                <Table.Tr key={group._id}>
+                  <Table.Td>{group.nome}</Table.Td>
+                  <Table.Td>{group.displayName || "N/A"}</Table.Td>
+                  <Table.Td>{group.membros?.length || 0}</Table.Td>
+                  <Table.Td>
+                    {new Date(group.createdAt).toLocaleDateString("pt-BR")}
+                  </Table.Td>
+                  <Table.Td style={{ textAlign: "center" }}>
+                    <Flex gap="xs" justify="center">
+                      <ActionIcon
+                        variant="subtle"
+                        color="blue"
+                        size="sm"
+                        onClick={() => handleInviteMemberClick(group)}
+                        aria-label="Convidar membro"
+                      >
+                        <IconUserPlus size={14} />
+                      </ActionIcon>
+                      {/* Add edit functionality later if needed */}
+                      {/* <ActionIcon
+                        variant="subtle"
+                        color="gray"
+                        size="sm"
+                        onClick={() => handleEditClick(group)}
+                        aria-label="Editar grupo"
+                      >
+                        <IconEdit size={14} />
+                      </ActionIcon> */}
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        size="sm"
+                        onClick={() => handleDeleteGroupClick(group)}
+                        aria-label="Excluir grupo"
+                      >
+                        <IconTrash size={14} />
+                      </ActionIcon>
+                    </Flex>
+                  </Table.Td>
+                </Table.Tr>
+              ))
+            )}
+          </Table.Tbody>
+        </Table>
+      </Paper>
 
-                      <Group gap="xs">
-                        <Button
-                          variant="light"
-                          onClick={() => navigate(`/grupo/${group._id}`)}
-                        >
-                          Acessar
-                        </Button>
-                        <Menu shadow="md" width={200} position="bottom-end">
-                          <Menu.Target>
-                            <ActionIcon variant="light" size="lg" radius="md">
-                              <IconDotsVertical size={16} />
-                            </ActionIcon>
-                          </Menu.Target>
-
-                          <Menu.Dropdown>
-                            <Menu.Item
-                              leftSection={<IconEdit size={14} />}
-                              onClick={() => {
-                                setEditingGroup(group);
-                                form.setValues({
-                                  nome: group.displayName || group.nome,
-                                }); // Set form value to displayName
-                              }}
-                            >
-                              Editar
-                            </Menu.Item>
-                            <Menu.Item
-                              color="red"
-                              leftSection={<IconTrash size={14} />}
-                              onClick={() => handleDeleteGroup(group._id)}
-                            >
-                              Excluir
-                            </Menu.Item>
-                          </Menu.Dropdown>
-                        </Menu>
-                      </Group>
-                    </Group>
-                  </Card>
-                </motion.div>
-              ))}
-            </Stack>
-          ) : (
-            <Card withBorder py="xl">
-              <Stack align="center" gap="md">
-                <Text c="dimmed" ta="center">
-                  Você ainda não tem nenhum grupo financeiro.
-                  <br />
-                  Crie seu primeiro grupo para começar!
-                </Text>
-                <Button
-                  leftSection={<IconPlus size={16} />}
-                  onClick={() => setCreateModalOpen(true)}
-                >
-                  Criar Grupo
-                </Button>
-              </Stack>
-            </Card>
-          )}
-        </motion.div>
-      )}
-
+      {/* Create New Group Modal */}
       <Modal
-        opened={createModalOpen}
-        onClose={() => {
-          setCreateModalOpen(false);
-          form.reset();
-        }}
+        opened={createModalOpened}
+        onClose={closeCreateModal}
         title="Criar Novo Grupo"
+        centered
       >
-        <form onSubmit={form.onSubmit(handleCreateGroup)}>
+        <form onSubmit={createForm.handleSubmit(handleCreateGroup)}>
           <Stack>
-            <TextInput
-              required
-              label="Nome do grupo"
-              placeholder="Ex: Família Silva"
-              {...form.getInputProps("nome")}
+            <Controller
+              name="nome"
+              control={createForm.control}
+              render={({ field }) => (
+                <TextInput
+                  label="Nome do Grupo"
+                  placeholder="Ex: Família, Amigos, Trabalho"
+                  error={createForm.formState.errors.nome?.message}
+                  {...field}
+                />
+              )}
             />
-            <Button type="submit" fullWidth>
-              Criar Grupo
-            </Button>
+            <Group justify="flex-end" mt="md">
+              <Button variant="default" onClick={closeCreateModal}>
+                Cancelar
+              </Button>
+              <Button type="submit">Criar Grupo</Button>
+            </Group>
           </Stack>
         </form>
       </Modal>
 
+      {/* Invite Member Modal */}
       <Modal
-        opened={!!editingGroup}
-        onClose={() => {
-          setEditingGroup(null);
-          form.reset();
-        }}
-        title="Editar Grupo"
+        opened={inviteModalOpened}
+        onClose={closeInviteModal}
+        title={`Convidar para "${selectedGroup?.displayName || selectedGroup?.nome}"`}
+        centered
       >
-        <form onSubmit={form.onSubmit(handleEditGroup)}>
-          <Stack>
-            <TextInput
-              required
-              label="Nome do grupo"
-              placeholder="Ex: Família Silva"
-              {...form.getInputProps("nome")}
-            />
-            <Button type="submit" fullWidth>
-              Salvar Alterações
-            </Button>
-          </Stack>
-        </form>
+        {selectedGroup && (
+          <form onSubmit={inviteForm.handleSubmit(handleInviteMember)}>
+            <Stack>
+              <Text>
+                Envie um convite para um novo membro se juntar a este grupo.
+              </Text>
+              <Controller
+                name="email"
+                control={inviteForm.control}
+                render={({ field }) => (
+                  <TextInput
+                    label="E-mail do Membro"
+                    placeholder="email@example.com"
+                    error={inviteForm.formState.errors.email?.message}
+                    {...field}
+                  />
+                )}
+              />
+              <Group justify="flex-end" mt="md">
+                <Button variant="default" onClick={closeInviteModal}>
+                  Cancelar
+                </Button>
+                <Button type="submit">Enviar Convite</Button>
+              </Group>
+            </Stack>
+          </form>
+        )}
       </Modal>
-    </Stack>
+
+      {/* Delete Group Confirmation Modal */}
+      <Modal
+        opened={deleteModalOpened}
+        onClose={closeDeleteModal}
+        title="Confirmar Exclusão do Grupo"
+        centered
+      >
+        <Text>
+          Tem certeza de que deseja excluir o grupo "
+          <b>{selectedGroup?.displayName || selectedGroup?.nome}</b>"? Esta
+          ação não pode ser desfeita e removerá o grupo para todos os membros.
+        </Text>
+        <Group justify="flex-end" mt="md">
+          <Button variant="default" onClick={closeDeleteModal}>
+            Cancelar
+          </Button>
+          <Button color="red" onClick={handleConfirmDeleteGroup}>
+            Excluir Grupo
+          </Button>
+        </Group>
+      </Modal>
+    </motion.div>
   );
 }
