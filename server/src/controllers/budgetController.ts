@@ -170,13 +170,7 @@ export const getGroupBudgets = async (
     const { groupId } = req.params;
     const userId = req.user?._id;
 
-    console.log("DEBUG: getGroupBudgets - Received groupId:", groupId);
-    console.log("DEBUG: getGroupBudgets - Authenticated userId:", userId);
-
     if (!userId) {
-      console.log(
-        "DEBUG: getGroupBudgets - User not authenticated, returning 401."
-      );
       return res
         .status(401)
         .json({ success: false, error: "User not authenticated." });
@@ -184,7 +178,6 @@ export const getGroupBudgets = async (
 
     // Validate groupId as a valid ObjectId
     if (!mongoose.Types.ObjectId.isValid(groupId)) {
-      console.log("DEBUG: getGroupBudgets - Invalid groupId, returning 400.");
       return res.status(400).json({
         success: false,
         error: "ID do grupo inválido.",
@@ -193,13 +186,8 @@ export const getGroupBudgets = async (
 
     // Verify if the user is a member of the specified group
     const group = await Group.findById(groupId);
-    console.log(
-      "DEBUG: getGroupBudgets - Found group:",
-      group ? group.nome : "None"
-    );
 
     if (!group) {
-      console.log("DEBUG: getGroupBudgets - Group not found, returning 403.");
       return res.status(403).json({
         success: false,
         error: "Você não tem permissão para acessar os orçamentos deste grupo.",
@@ -207,19 +195,8 @@ export const getGroupBudgets = async (
     }
 
     const isMember = group.membros.some((memberId) => memberId.equals(userId));
-    console.log(
-      "DEBUG: getGroupBudgets - Group members:",
-      group.membros.map((m) => m.toString())
-    );
-    console.log(
-      "DEBUG: getGroupBudgets - Is user a member of this group?",
-      isMember
-    );
 
     if (!isMember) {
-      console.log(
-        "DEBUG: getGroupBudgets - User is not a member, returning 403."
-      );
       return res.status(403).json({
         success: false,
         error: "Você não tem permissão para acessar os orçamentos deste grupo.",
@@ -229,7 +206,6 @@ export const getGroupBudgets = async (
     const budgets = await Budget.find({ grupoId: groupId })
       .sort({ dataInicio: -1 })
       .lean();
-    console.log("DEBUG: getGroupBudgets - Budgets found:", budgets.length);
 
     res.status(200).json({
       success: true,

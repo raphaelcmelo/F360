@@ -188,7 +188,6 @@ export default function Budget() {
         ) || null;
 
       if (!currentBudget) {
-        console.log("No budget found for current month, creating new one...");
         currentBudget = await budgetApi.createBudget(
           selectedGroupId,
           startDate.toISOString(),
