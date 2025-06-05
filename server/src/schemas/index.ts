@@ -84,6 +84,21 @@ export const UpdatePlannedBudgetItemSchema = z.object({
     .min(0, "Valor planejado deve ser não negativo")
     .optional(),
 });
-export const DeletePlannedBudgetItemSchema = z.object({
-  itemId: z.string().min(1, "ID do item é obrigatório"),
+
+// Transaction Schemas
+export const CreateTransactionSchema = z.object({
+  grupoId: z.string().min(1, "ID do grupo é obrigatório"),
+  data: z.string().datetime("Data inválida. Use formato ISO 8601."),
+  categoria: z.enum(["renda", "despesa", "conta", "poupanca"], {
+    required_error: "Categoria é obrigatória",
+  }),
+  tipo: z.string().min(1, "Tipo é obrigatório"),
+  valor: z.number().min(0.01, "O valor deve ser maior que zero"),
+});
+
+export const UpdateTransactionSchema = z.object({
+  data: z.string().datetime("Data inválida. Use formato ISO 8601.").optional(),
+  categoria: z.enum(["renda", "despesa", "conta", "poupanca"]).optional(),
+  tipo: z.string().min(1, "Tipo é obrigatório").optional(),
+  valor: z.number().min(0.01, "O valor deve ser maior que zero").optional(),
 });
