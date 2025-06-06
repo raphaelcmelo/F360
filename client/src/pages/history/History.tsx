@@ -11,43 +11,81 @@ import {
   ThemeIcon,
   Loader,
   Center,
+  Select, // Import Select
 } from "@mantine/core";
 import { motion } from "framer-motion";
 import {
   IconArrowLeft,
   IconWallet,
-  IconChartBar,
-  IconUsers,
   IconPlus,
   IconEdit,
   IconTrash,
   IconUserPlus,
   IconUserMinus,
   IconBuildingBank,
+  IconCalendarStats, // Icon for budget
 } from "@tabler/icons-react";
 import { useAuth } from "../../contexts/AuthContext";
-import { activityLogApi } from "../../services/api";
+import { activityLogApi, budgetApi } from "../../services/api"; // Import budgetApi
 import { ActivityLog } from "../../types/activityLog";
+import { Budget } from "../../types/budget"; // Import Budget type
 
 export default function History() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, activeGroup } = useAuth(); // Get activeGroup from useAuth
   const [historyEntries, setHistoryEntries] = useState<ActivityLog[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]); // State for budgets
+  const [selectedBudgetId, setSelectedBudgetId] = useState<string | null>(null); // State for selected budget
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Effect to fetch budgets when active group changes
   useEffect(() => {
-    const fetchHistory = async () => {
-      if (!user || !user.activeGroup) {
-        setLoading(false);
-        setError("Nenhum grupo ativo selecionado.");
+    const fetchBudgets = async () => {
+      if (!user || !activeGroup) {
+        // Use activeGroup
+        setBudgets([]);
+        setSelectedBudgetId(null);
+        console.log("No active group, budgets set to empty.");
         return;
       }
 
       try {
-        setLoading(true);
+        const groupBudgets = await budgetApi.getGroupBudgets(activeGroup); // Use activeGroup
+        setBudgets(groupBudgets);
+        // Optionally, set the first budget as default or keep null
+        if (groupBudgets.length > 0) {
+          setSelectedBudgetId(groupBudgets[0]._id);
+        } else {
+          setSelectedBudgetId(null);
+        }
+      } catch (err) {
+        console.error("Failed to fetch budgets:", err);
+        // Handle error, maybe set an error state for budgets specifically
+      }
+    };
+
+    fetchBudgets();
+  }, [user, activeGroup]); // Depend on activeGroup
+
+  // Effect to fetch history entries when active group or selected budget changes
+  useEffect(() => {
+    const fetchHistory = async () => {
+      if (!user || !activeGroup) {
+        // Use activeGroup
+        setLoading(false);
+        setError("Nenhum grupo ativo selecionado.");
+        setHistoryEntries([]);
+        return;
+      }
+
+      setLoading(true);
+      setError(null); // Clear previous errors
+
+      try {
         const data = await activityLogApi.getActivitiesByGroup(
-          user.activeGroup
+          activeGroup, // Use activeGroup
+          selectedBudgetId || undefined // Pass selectedBudgetId, or undefined if null
         );
         setHistoryEntries(data);
       } catch (err) {
@@ -59,7 +97,7 @@ export default function History() {
     };
 
     fetchHistory();
-  }, [user]);
+  }, [user, activeGroup, selectedBudgetId]); // Depend on user, activeGroup and selectedBudgetId
 
   const getActivityIcon = (actionType: string) => {
     switch (actionType) {
@@ -85,6 +123,10 @@ export default function History() {
         return <IconEdit size={18} />;
       case "group_deleted":
         return <IconTrash size={18} />;
+      case "budget_created": // New action type
+        return <IconCalendarStats size={18} />;
+      case "budget_deleted": // New action type
+        return <IconTrash size={18} />;
       default:
         return <IconWallet size={18} />;
     }
@@ -97,6 +139,7 @@ export default function History() {
     if (actionType.includes("invited")) return "teal";
     if (actionType.includes("removed")) return "orange";
     if (actionType.includes("group")) return "violet";
+    if (actionType.includes("budget")) return "indigo"; // Color for budget actions
     return "gray";
   };
 
@@ -139,6 +182,13 @@ export default function History() {
     );
   };
 
+  const budgetSelectData = budgets.map((budget) => ({
+    value: budget._id,
+    label: `Orçamento de ${new Date(budget.dataInicio).toLocaleDateString(
+      "pt-BR"
+    )} a ${new Date(budget.dataFim).toLocaleDateString("pt-BR")}`,
+  }));
+
   return (
     <motion.div
       className="page-transition"
@@ -146,16 +196,30 @@ export default function History() {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
-      <Group mb="xl" align="center">
-        <ActionIcon
-          variant="light"
-          size="lg"
-          radius="xl"
-          onClick={() => navigate(-1)}
-        >
-          <IconArrowLeft size={20} />
-        </ActionIcon>
-        <Title order={2}>Histórico de Atividades</Title>
+      <Group mb="xl" align="center" justify="space-between">
+        <Group align="center">
+          <ActionIcon
+            variant="light"
+            size="lg"
+            radius="xl"
+            onClick={() => navigate(-1)}
+          >
+            <IconArrowLeft size={20} />
+          </ActionIcon>
+          <Title order={2}>Histórico de Atividades</Title>
+        </Group>
+        <Select
+          leftSection={<IconCalendarStats size={16} />}
+          placeholder="Filtrar por orçamento"
+          data={budgetSelectData}
+          value={selectedBudgetId}
+          onChange={setSelectedBudgetId}
+          searchable
+          clearable
+          nothingFoundMessage="Nenhum orçamento encontrado."
+          disabled={budgets.length === 0}
+          w={250} // Adjust width as needed
+        />
       </Group>
 
       <Paper p="md" radius="md" withBorder>

@@ -29,6 +29,8 @@ interface AuthContextType {
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (token: string, password: string) => Promise<void>;
   checkAuth: () => Promise<void>;
+  activeGroup: string | null; // Add activeGroup to context type
+  setActiveGroup: (groupId: string | null) => void; // Add setActiveGroup to context type
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -52,6 +54,7 @@ interface User {
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeGroup, setActiveGroupState] = useState<string | null>(null); // State for active group
   const navigate = useNavigate();
 
   // Check if token is expired
@@ -64,6 +67,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
+  // Set active group
+  const setActiveGroup = useCallback((groupId: string | null) => {
+    setActiveGroupState(groupId);
+  }, []);
+
   // Check if user is authenticated on initial load
   const checkAuth = useCallback(async () => {
     setIsLoading(true);
@@ -73,26 +81,37 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (!token || isTokenExpired(token)) {
       if (!refreshToken || isTokenExpired(refreshToken)) {
         setUser(null);
+        setActiveGroupState(null); // Clear active group on logout
         setIsLoading(false);
         return;
       }
 
       try {
-        // In a real implementation, this would call the backend to refresh token
-        // For now, the interceptor handles refresh, so we just try to get profile
         const userData = await authApi.getProfile();
         setUser(userData);
+        if (userData.grupos && userData.grupos.length > 0) {
+          setActiveGroupState(userData.grupos[0].groupId._id); // Set first group as active
+        } else {
+          setActiveGroupState(null);
+        }
       } catch (error) {
         localStorage.removeItem("token");
         localStorage.removeItem("refreshToken");
         setUser(null);
+        setActiveGroupState(null); // Clear active group on error
       }
     } else {
       try {
         const userData = await authApi.getProfile();
         setUser(userData);
+        if (userData.grupos && userData.grupos.length > 0) {
+          setActiveGroupState(userData.grupos[0].groupId._id); // Set first group as active
+        } else {
+          setActiveGroupState(null);
+        }
       } catch (error) {
         setUser(null);
+        setActiveGroupState(null); // Clear active group on error
       }
     }
 
@@ -120,6 +139,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       // Set user data
       setUser(userData);
+      if (userData.grupos && userData.grupos.length > 0) {
+        setActiveGroupState(userData.grupos[0].groupId._id); // Set first group as active on login
+      } else {
+        setActiveGroupState(null);
+      }
 
       // Show success notification
       notifications.show({
@@ -179,6 +203,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       localStorage.removeItem("token");
       localStorage.removeItem("refreshToken");
       setUser(null);
+      setActiveGroupState(null); // Clear active group on logout
       navigate("/login");
       notifications.show({
         title: "Logout realizado",
@@ -191,6 +216,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       localStorage.removeItem("token");
       localStorage.removeItem("refreshToken");
       setUser(null);
+      setActiveGroupState(null); // Clear active group on error
       navigate("/login");
       notifications.show({
         title: "Erro ao fazer logout",
@@ -272,6 +298,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         forgotPassword,
         resetPassword,
         checkAuth,
+        activeGroup, // Provide activeGroup
+        setActiveGroup, // Provide setActiveGroup
       }}
     >
       {children}

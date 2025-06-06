@@ -8,10 +8,11 @@ import connectDB from "./config/database";
 // Import routes
 import authRoutes from "./routes/auth";
 import userRoutes from "./routes/users";
-import budgetRoutes from "./routes/budgetRoutes"; // Import budget routes
-import groupRoutes from "./routes/groupRoutes"; // Import group routes
-import budgetItemRoutes from "./routes/budgetItemRoutes"; // Import budget item routes
-import transactionRoutes from "./routes/transactionRoutes"; // Import transaction routes
+import budgetRoutes from "./routes/budgetRoutes";
+import groupRoutes from "./routes/groupRoutes";
+import budgetItemRoutes from "./routes/budgetItemRoutes";
+import transactionRoutes from "./routes/transactionRoutes";
+import activityLogRoutes from "./routes/activityLogRoutes";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -46,6 +47,7 @@ app.use("/api/groups", groupRoutes);
 app.use("/api/budgets", budgetRoutes);
 app.use("/api/budget-items", budgetItemRoutes);
 app.use("/api/transactions", transactionRoutes); // Use transaction routes
+app.use("/api/activities", activityLogRoutes); // Use activity log routes
 
 // Health check
 app.get("/api/health", (req, res) => {

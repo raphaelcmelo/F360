@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   AppShell,
@@ -22,17 +22,39 @@ import {
 } from "@tabler/icons-react";
 import { useAuth } from "../../contexts/AuthContext";
 import Sidebar from "./Sidebar";
+import GroupSelector from "../ui/GroupSelector"; // Import GroupSelector
+import { groupApi } from "../../services/api"; // Import groupApi
+import { Group as GroupType } from "../../types/group"; // Import GroupType
 
 export default function AppLayout() {
   const [opened, setOpened] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, activeGroup, setActiveGroup } = useAuth(); // Get activeGroup and setActiveGroup
   const { colorScheme, setColorScheme } = useMantineColorScheme();
+  const [groups, setGroups] = useState<GroupType[]>([]); // State for user groups
 
   const toggleColorScheme = () => {
     setColorScheme(colorScheme === "dark" ? "light" : "dark");
   };
+
+  // Fetch user groups when user data is available
+  useEffect(() => {
+    const fetchGroups = async () => {
+      if (user) {
+        try {
+          const userGroups = await groupApi.getUserGroups();
+          setGroups(userGroups);
+        } catch (error) {
+          console.error("Failed to fetch user groups:", error);
+          setGroups([]);
+        }
+      } else {
+        setGroups([]);
+      }
+    };
+    fetchGroups();
+  }, [user]); // Depend on user object
 
   const getPageTitle = () => {
     const path = location.pathname;
@@ -72,6 +94,16 @@ export default function AppLayout() {
           </Group>
 
           <Group>
+            {/* Group Selector in the header */}
+            {user && groups.length > 0 && (
+              <GroupSelector
+                value={activeGroup || ""} // Use activeGroup from context
+                onChange={setActiveGroup} // Use setActiveGroup from context
+                groups={groups}
+                w={200} // Adjust width as needed
+              />
+            )}
+
             <ActionIcon
               variant="light"
               onClick={toggleColorScheme}

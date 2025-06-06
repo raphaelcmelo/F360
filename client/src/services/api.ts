@@ -250,8 +250,17 @@ export const transactionApi = {
 };
 
 export const activityLogApi = {
-  getActivitiesByGroup: async (groupId: string): Promise<ActivityLog[]> => {
-    const response = await api.get(`/activities/group/${groupId}`);
+  getActivitiesByGroup: async (
+    groupId: string,
+    budgetId?: string
+  ): Promise<ActivityLog[]> => {
+    const params = new URLSearchParams();
+    if (budgetId) {
+      params.append("budgetId", budgetId);
+    }
+    const response = await api.get(
+      `/activities/group/${groupId}?${params.toString()}`
+    );
     return response.data.data;
   },
 };
