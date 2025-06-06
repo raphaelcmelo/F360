@@ -23,7 +23,8 @@ export const createTransaction = async (
   try {
     const validatedData = CreateTransactionSchema.parse(req.body);
 
-    const { grupoId, data, categoria, tipo, valor } = validatedData;
+    const { grupoId, data, categoria, tipo, valor, description } =
+      validatedData;
 
     if (!req.user || !req.user.id || !req.user.name) {
       return res.status(401).json({
@@ -40,6 +41,7 @@ export const createTransaction = async (
       categoria,
       tipo,
       valor,
+      description: description || "", // Save description, default to empty string if not provided
     });
 
     // Log activity
@@ -50,11 +52,14 @@ export const createTransaction = async (
       "transaction_created",
       `Lançamento de ${newTransaction.categoria} "${
         newTransaction.tipo
-      }" no valor de R$ ${formatValueToPtBR(newTransaction.valor)} criado.`,
+      }" no valor de R$ ${formatValueToPtBR(newTransaction.valor)}${
+        newTransaction.description ? ` (${newTransaction.description})` : ""
+      } criado.`,
       {
         transactionId: newTransaction._id,
         categoria: newTransaction.categoria,
         value: newTransaction.valor,
+        description: newTransaction.description,
       }
     );
 
@@ -202,6 +207,10 @@ export const updateTransaction = async (
       {
         ...validatedData,
         data: validatedData.data ? new Date(validatedData.data) : undefined,
+        description:
+          validatedData.description !== undefined
+            ? validatedData.description
+            : undefined, // Ensure description is updated
       },
       { new: true, runValidators: true }
     );
@@ -215,7 +224,13 @@ export const updateTransaction = async (
         "transaction_updated",
         `Lançamento "${oldTransaction.tipo}" de R$ ${formatValueToPtBR(
           oldTransaction.valor
-        )} para R$ ${formatValueToPtBR(updatedTransaction.valor)} atualizado.`,
+        )}${
+          oldTransaction.description ? ` (${oldTransaction.description})` : ""
+        } para R$ ${formatValueToPtBR(updatedTransaction.valor)}${
+          updatedTransaction.description
+            ? ` (${updatedTransaction.description})`
+            : ""
+        } atualizado.`,
         {
           transactionId: updatedTransaction._id,
           categoria: updatedTransaction.categoria,
@@ -223,6 +238,8 @@ export const updateTransaction = async (
           newValue: updatedTransaction.valor,
           oldCategory: oldTransaction.categoria,
           newCategory: updatedTransaction.categoria,
+          oldDescription: oldTransaction.description,
+          newDescription: updatedTransaction.description,
         }
       );
     }
@@ -285,11 +302,14 @@ export const deleteTransaction = async (
       "transaction_deleted",
       `Lançamento "${transaction.tipo}" de R$ ${formatValueToPtBR(
         transaction.valor
-      )} excluído.`,
+      )}${
+        transaction.description ? ` (${transaction.description})` : ""
+      } excluído.`,
       {
         transactionId: transaction._id,
         categoria: transaction.categoria,
         value: transaction.valor,
+        description: transaction.description,
       }
     );
 

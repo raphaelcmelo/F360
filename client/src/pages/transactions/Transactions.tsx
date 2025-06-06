@@ -15,6 +15,7 @@ import {
   Loader,
   Center,
   Flex,
+  Divider,
 } from "@mantine/core";
 import { useForm, FormProvider, Controller } from "react-hook-form";
 import { z } from "zod";
@@ -32,6 +33,7 @@ import {
   IconFilter,
   IconEdit,
   IconTrash,
+  IconInfoCircle,
 } from "@tabler/icons-react";
 import {
   transactionApi,
@@ -50,6 +52,7 @@ import {
 import CurrencyInput from "../../components/ui/CurrencyInput";
 import { notifications } from "@mantine/notifications";
 import { Group as UserGroup } from "../../types/group";
+import { formatCurrency } from "../../utils/format"; // Import the formatCurrency utility
 
 // Define the schema for the transaction form
 const transactionSchema = z.object({
@@ -59,6 +62,10 @@ const transactionSchema = z.object({
   }),
   tipo: z.string().min(1, "Tipo é obrigatório"),
   valor: z.number().min(0.01, "O valor deve ser maior que zero"),
+  description: z
+    .string()
+    .max(140, "Descrição muito longa (máx. 140 caracteres)")
+    .optional(),
 });
 
 type TransactionFormValues = z.infer<typeof transactionSchema>;
@@ -69,6 +76,10 @@ const updateTransactionSchema = z.object({
   categoria: z.enum(["renda", "despesa", "conta", "poupanca"]).optional(),
   tipo: z.string().min(1, "Tipo é obrigatório").optional(),
   valor: z.number().min(0.01, "O valor deve ser maior que zero").optional(),
+  description: z
+    .string()
+    .max(140, "Descrição muito longa (máx. 140 caracteres)")
+    .optional(),
 });
 
 type UpdateTransactionFormValues = z.infer<typeof updateTransactionSchema>;
@@ -93,6 +104,14 @@ export default function Transactions() {
   const [selectedTransaction, setSelectedTransaction] =
     useState<Transaction | null>(null);
 
+  // Modal for detailed transaction view
+  const [
+    detailsModalOpened,
+    { open: openDetailsModal, close: closeDetailsModal },
+  ] = useDisclosure(false);
+  const [selectedTransactionForDetails, setSelectedTransactionForDetails] =
+    useState<Transaction | null>(null);
+
   const [searchParams] = useSearchParams();
   const [highlightedTransactionId, setHighlightedTransactionId] = useState<
     string | null
@@ -108,6 +127,7 @@ export default function Transactions() {
       categoria: "renda",
       tipo: "",
       valor: 0,
+      description: "",
     },
   });
 
@@ -118,6 +138,7 @@ export default function Transactions() {
       categoria: undefined,
       tipo: "",
       valor: undefined,
+      description: "",
     },
   });
 
@@ -335,7 +356,8 @@ export default function Transactions() {
         values.data.toISOString(),
         values.categoria,
         values.tipo,
-        values.valor
+        values.valor,
+        values.description || "" // Pass description, default to empty string if undefined
       );
 
       setTransactions((prev) => [...prev, newTransaction]);
@@ -363,6 +385,7 @@ export default function Transactions() {
       categoria: transaction.categoria,
       tipo: transaction.tipo,
       valor: transaction.valor,
+      description: transaction.description || "", // Set description, default to empty string if undefined
     });
     openEditModal();
   };
@@ -376,6 +399,9 @@ export default function Transactions() {
       const updates = {
         ...values,
         data: values.data ? values.data.toISOString() : undefined,
+        // Ensure description is passed, even if empty string
+        description:
+          values.description !== undefined ? values.description : undefined,
       };
 
       const updatedTransaction = await transactionApi.updateTransaction(
@@ -433,6 +459,11 @@ export default function Transactions() {
         color: "red",
       });
     }
+  };
+
+  const handleRowClick = (transaction: Transaction) => {
+    setSelectedTransactionForDetails(transaction);
+    openDetailsModal();
   };
 
   const filteredTransactions = transactions.filter((transaction) => {
@@ -558,6 +589,7 @@ export default function Transactions() {
               <Table.Th>Data</Table.Th>
               <Table.Th>Categoria</Table.Th>
               <Table.Th>Tipo</Table.Th>
+              <Table.Th>Descrição</Table.Th>
               <Table.Th>Criado por</Table.Th>
               <Table.Th style={{ textAlign: "right" }}>Valor</Table.Th>
               <Table.Th style={{ textAlign: "center" }}>Ações</Table.Th>
@@ -566,7 +598,7 @@ export default function Transactions() {
           <Table.Tbody>
             {isLoading ? (
               <Table.Tr>
-                <Table.Td colSpan={6}>
+                <Table.Td colSpan={7}>
                   <Center>
                     <Loader size="sm" />
                     <Text ml="sm" c="dimmed">
@@ -577,13 +609,13 @@ export default function Transactions() {
               </Table.Tr>
             ) : sortedTransactions.length === 0 && selectedGroupId ? (
               <Table.Tr>
-                <Table.Td colSpan={6} style={{ textAlign: "center" }}>
+                <Table.Td colSpan={7} style={{ textAlign: "center" }}>
                   <Text c="dimmed">Nenhum lançamento encontrado</Text>
                 </Table.Td>
               </Table.Tr>
             ) : !selectedGroupId ? (
               <Table.Tr>
-                <Table.Td colSpan={6} style={{ textAlign: "center" }}>
+                <Table.Td colSpan={7} style={{ textAlign: "center" }}>
                   <Text c="dimmed">
                     Selecione ou crie um grupo para visualizar lançamentos.
                   </Text>
@@ -600,7 +632,9 @@ export default function Transactions() {
                       highlightedTransactionId === transaction._id
                         ? "var(--mantine-color-yellow-light)"
                         : "transparent",
+                    cursor: "pointer", // Indicate that the row is clickable
                   }}
+                  onClick={() => handleRowClick(transaction)} // Add click handler
                 >
                   <Table.Td>
                     {new Date(transaction.data).toLocaleDateString("pt-BR")}
@@ -627,6 +661,11 @@ export default function Transactions() {
                     </Badge>
                   </Table.Td>
                   <Table.Td>{transaction.tipo}</Table.Td>
+                  <Table.Td>
+                    <Text lineClamp={1} title={transaction.description}>
+                      {transaction.description || "-"}
+                    </Text>
+                  </Table.Td>
                   <Table.Td>{transaction.criadoPorNome}</Table.Td>
                   <Table.Td style={{ textAlign: "right" }}>
                     <Text
@@ -641,10 +680,7 @@ export default function Transactions() {
                           : "blue"
                       }
                     >
-                      R${" "}
-                      {transaction.valor.toLocaleString("pt-BR", {
-                        minimumFractionDigits: 2,
-                      })}
+                      {formatCurrency(transaction.valor)}
                     </Text>
                   </Table.Td>
                   <Table.Td style={{ textAlign: "center" }}>
@@ -653,7 +689,10 @@ export default function Transactions() {
                         variant="subtle"
                         color="gray"
                         size="sm"
-                        onClick={() => handleEditClick(transaction)}
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent row click from firing
+                          handleEditClick(transaction);
+                        }}
                         aria-label="Editar lançamento"
                       >
                         <IconEdit size={14} />
@@ -662,7 +701,10 @@ export default function Transactions() {
                         variant="subtle"
                         color="red"
                         size="sm"
-                        onClick={() => handleDeleteClick(transaction)}
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent row click from firing
+                          handleDeleteClick(transaction);
+                        }}
                         aria-label="Excluir lançamento"
                       >
                         <IconTrash size={14} />
@@ -759,6 +801,20 @@ export default function Transactions() {
                 )}
               />
 
+              <Controller
+                name="description"
+                control={form.control}
+                render={({ field }) => (
+                  <TextInput
+                    label="Descrição (opcional)"
+                    placeholder="Adicione uma breve descrição"
+                    maxLength={140}
+                    error={form.formState.errors.description?.message}
+                    {...field}
+                  />
+                )}
+              />
+
               <Button type="submit" fullWidth mt="md">
                 Salvar
               </Button>
@@ -848,6 +904,20 @@ export default function Transactions() {
                   )}
                 />
 
+                <Controller
+                  name="description"
+                  control={editForm.control}
+                  render={({ field }) => (
+                    <TextInput
+                      label="Descrição (opcional)"
+                      placeholder="Adicione uma breve descrição"
+                      maxLength={140}
+                      error={editForm.formState.errors.description?.message}
+                      {...field}
+                    />
+                  )}
+                />
+
                 <Button type="submit" fullWidth mt="md">
                   Salvar Alterações
                 </Button>
@@ -866,10 +936,10 @@ export default function Transactions() {
       >
         <Text>
           Tem certeza de que deseja excluir o lançamento "
-          <b>{selectedTransaction?.tipo}</b>" (R${" "}
-          {selectedTransaction?.valor.toLocaleString("pt-BR", {
-            minimumFractionDigits: 2,
-          })}
+          <b>{selectedTransaction?.tipo}</b>" (
+          {selectedTransaction?.valor !== undefined
+            ? formatCurrency(selectedTransaction.valor)
+            : ""}
           )? Esta ação não pode ser desfeita.
         </Text>
         <Group justify="flex-end" mt="md">
@@ -880,6 +950,118 @@ export default function Transactions() {
             Excluir
           </Button>
         </Group>
+      </Modal>
+
+      {/* Transaction Details Modal */}
+      <Modal
+        opened={detailsModalOpened}
+        onClose={closeDetailsModal}
+        title={
+          <Group gap="xs">
+            <IconInfoCircle size={20} />
+            <Text fw={700}>Detalhes do Lançamento</Text>
+          </Group>
+        }
+        size="md"
+        centered
+      >
+        {selectedTransactionForDetails && (
+          <Stack gap="sm">
+            <Group justify="space-between">
+              <Text fw={500}>Data:</Text>
+              <Text>
+                {new Date(
+                  selectedTransactionForDetails.data
+                ).toLocaleDateString("pt-BR")}
+              </Text>
+            </Group>
+            <Group justify="space-between">
+              <Text fw={500}>Categoria:</Text>
+              <Badge
+                color={
+                  selectedTransactionForDetails.categoria === "renda"
+                    ? "green"
+                    : selectedTransactionForDetails.categoria === "despesa"
+                    ? "red"
+                    : selectedTransactionForDetails.categoria === "conta"
+                    ? "orange"
+                    : "blue"
+                }
+              >
+                {selectedTransactionForDetails.categoria === "renda"
+                  ? "Receita"
+                  : selectedTransactionForDetails.categoria === "despesa"
+                  ? "Despesa"
+                  : selectedTransactionForDetails.categoria === "conta"
+                  ? "Conta"
+                  : "Poupança"}
+              </Badge>
+            </Group>
+            <Group justify="space-between">
+              <Text fw={500}>Tipo:</Text>
+              <Text>{selectedTransactionForDetails.tipo}</Text>
+            </Group>
+            <Group justify="space-between">
+              <Text fw={500}>Valor:</Text>
+              <Text
+                fw={500}
+                c={
+                  selectedTransactionForDetails.categoria === "renda"
+                    ? "green"
+                    : selectedTransactionForDetails.categoria === "despesa"
+                    ? "red"
+                    : selectedTransactionForDetails.categoria === "conta"
+                    ? "orange"
+                    : "blue"
+                }
+              >
+                {formatCurrency(selectedTransactionForDetails.valor)}
+              </Text>
+            </Group>
+            <Group justify="space-between" align="flex-start">
+              <Text fw={500}>Descrição:</Text>
+              <Text style={{ maxWidth: "70%", textAlign: "right" }}>
+                {selectedTransactionForDetails.description || "N/A"}
+              </Text>
+            </Group>
+            <Group justify="space-between">
+              <Text fw={500}>Criado por:</Text>
+              <Text>{selectedTransactionForDetails.criadoPorNome}</Text>
+            </Group>
+            <Group justify="space-between">
+              <Text fw={500}>Criado em:</Text>
+              <Text>
+                {new Date(
+                  selectedTransactionForDetails.createdAt
+                ).toLocaleString("pt-BR")}
+              </Text>
+            </Group>
+            {selectedTransactionForDetails.updatedAt && (
+              <Group justify="space-between">
+                <Text fw={500}>Última atualização:</Text>
+                <Text>
+                  {new Date(
+                    selectedTransactionForDetails.updatedAt
+                  ).toLocaleString("pt-BR")}
+                </Text>
+              </Group>
+            )}
+            <Divider my="sm" />
+            <Group justify="flex-end">
+              <Button variant="default" onClick={closeDetailsModal}>
+                Fechar
+              </Button>
+              <Button
+                onClick={() => {
+                  closeDetailsModal();
+                  handleEditClick(selectedTransactionForDetails);
+                }}
+              >
+                Editar
+              </Button>
+            </Group>
+          </Stack>
+        )}
       </Modal>
     </motion.div>
   );

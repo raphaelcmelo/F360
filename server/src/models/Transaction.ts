@@ -8,6 +8,7 @@ export interface ITransaction extends Document {
   categoria: "renda" | "despesa" | "conta" | "poupanca";
   tipo: string;
   valor: number;
+  description?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -47,6 +48,12 @@ const TransactionSchema = new Schema<ITransaction>(
       type: Number,
       required: true,
       min: 0.01,
+    },
+    description: {
+      type: String,
+      maxlength: 140,
+      trim: true,
+      required: false,
     },
   },
   {

@@ -3,10 +3,11 @@ export interface Transaction {
   grupoId: string;
   criadoPor: string;
   criadoPorNome: string;
-  data: string; // ISO date string
+  data: string;
   categoria: "renda" | "despesa" | "conta" | "poupanca";
   tipo: string;
   valor: number;
+  description?: string;
   createdAt: string;
   updatedAt?: string;
 }

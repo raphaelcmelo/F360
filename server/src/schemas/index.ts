@@ -94,6 +94,10 @@ export const CreateTransactionSchema = z.object({
   }),
   tipo: z.string().min(1, "Tipo é obrigatório"),
   valor: z.number().min(0.01, "O valor deve ser maior que zero"),
+  description: z
+    .string()
+    .max(140, "Descrição muito longa (máx. 140 caracteres)")
+    .optional(), // New optional field
 });
 
 export const UpdateTransactionSchema = z.object({
@@ -101,4 +105,11 @@ export const UpdateTransactionSchema = z.object({
   categoria: z.enum(["renda", "despesa", "conta", "poupanca"]).optional(),
   tipo: z.string().min(1, "Tipo é obrigatório").optional(),
   valor: z.number().min(0.01, "O valor deve ser maior que zero").optional(),
+  description: z
+    .string()
+    .max(140, "Descrição muito longa (máx. 140 caracteres)")
+    .optional(), // New optional field
+});
+export const DeleteTransactionSchema = z.object({
+  transactionId: z.string().min(1, "ID da transação é obrigatório"),
 });
