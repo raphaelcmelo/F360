@@ -32,7 +32,7 @@ import { Budget } from "../../types/budget";
 
 export default function History() {
   const navigate = useNavigate();
-  const { user, activeGroup } = useAuth();
+  const { user, activeGroup, isLoading: authLoading } = useAuth(); // Adicionado isLoading do AuthContext
   const [historyEntries, setHistoryEntries] = useState<ActivityLog[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [selectedBudgetId, setSelectedBudgetId] = useState<string | null>(null);
@@ -41,10 +41,10 @@ export default function History() {
 
   useEffect(() => {
     const fetchBudgets = async () => {
-      if (!user || !activeGroup) {
+      // Só busca orçamentos se não estiver carregando a autenticação e se houver usuário e grupo ativo
+      if (authLoading || !user || !activeGroup) {
         setBudgets([]);
         setSelectedBudgetId(null);
-        console.log("No active group, budgets set to empty.");
         return;
       }
 
@@ -62,11 +62,12 @@ export default function History() {
     };
 
     fetchBudgets();
-  }, [user, activeGroup]);
+  }, [user, activeGroup, authLoading]); // Adicionado authLoading às dependências
 
   useEffect(() => {
     const fetchHistory = async () => {
-      if (!user || !activeGroup) {
+      // Só busca histórico se não estiver carregando a autenticação e se houver usuário e grupo ativo
+      if (authLoading || !user || !activeGroup) {
         setLoading(false);
         setError("Nenhum grupo ativo selecionado.");
         setHistoryEntries([]);
@@ -91,7 +92,7 @@ export default function History() {
     };
 
     fetchHistory();
-  }, [user, activeGroup, selectedBudgetId]);
+  }, [user, activeGroup, selectedBudgetId, authLoading]); // Adicionado authLoading às dependências
 
   const getActivityIcon = (actionType: string) => {
     switch (actionType) {
@@ -127,62 +128,44 @@ export default function History() {
   };
 
   const getActivityColor = (item: ActivityLog) => {
-    console.log("Processing item:", item.actionType, item.description); // Log action type and description
     if (item.actionType.startsWith("transaction_")) {
       const transactionCategory = item.details?.categoria;
-      console.log("  Transaction category:", transactionCategory); // Log the extracted category
 
       switch (transactionCategory) {
         case "renda":
-          console.log("  Returning green for renda");
           return "green";
         case "poupanca":
-          console.log("  Returning blue for poupanca");
           return "blue";
         case "despesa":
-          console.log("  Returning red for despesa");
           return "red";
         case "conta":
-          console.log("  Returning orange for conta");
           return "orange";
         default:
-          console.log(
-            "  Returning gray for unknown transaction category:",
-            transactionCategory
-          );
           return "gray";
       }
     }
 
     if (item.actionType.includes("created")) {
-      console.log("  Returning green for created");
       return "green";
     }
     if (item.actionType.includes("updated")) {
-      console.log("  Returning blue for updated");
       return "blue";
     }
     if (item.actionType.includes("deleted")) {
-      console.log("  Returning red for deleted");
       return "red";
     }
     if (item.actionType.includes("invited")) {
-      console.log("  Returning teal for invited");
       return "teal";
     }
     if (item.actionType.includes("removed")) {
-      console.log("  Returning orange for removed");
       return "orange";
     }
     if (item.actionType.includes("group")) {
-      console.log("  Returning violet for group");
       return "violet";
     }
     if (item.actionType.includes("budget")) {
-      console.log("  Returning indigo for budget");
       return "indigo";
     }
-    console.log("  Returning gray for default");
     return "gray";
   };
 
@@ -266,7 +249,7 @@ export default function History() {
       </Group>
 
       <Paper p="md" radius="md" withBorder>
-        {loading ? (
+        {loading || authLoading ? (
           <Center py="xl">
             <Loader />
             <Text ml="sm">Carregando histórico...</Text>

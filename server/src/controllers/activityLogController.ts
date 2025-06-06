@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import ActivityLog, { IActivityLog } from "../models/ActivityLog";
-import { AuthenticatedRequest } from "../types"; // Corrigido: Importar AuthenticatedRequest de types
+import { AuthenticatedRequest } from "../types";
 import mongoose from "mongoose";
 
 /**
@@ -34,7 +34,7 @@ export const createActivityLog = async (
 // @route   GET /api/activities/group/:groupId
 // @access  Private
 export const getActivitiesByGroup = async (
-  req: AuthenticatedRequest, // Corrigido: Usar AuthenticatedRequest
+  req: AuthenticatedRequest,
   res: Response
 ) => {
   try {
@@ -58,39 +58,61 @@ export const getActivitiesByGroup = async (
       });
     }
 
-    const baseQuery: any = {
-      grupoId: groupId,
+    const query: any = {
+      grupoId: new mongoose.Types.ObjectId(groupId),
     };
 
-    let finalQuery: any = baseQuery;
-
-    // If budgetId is provided, apply a more complex filter
+    // If budgetId is provided, apply a more complex filter that includes all relevant activities
     if (
       budgetId &&
       typeof budgetId === "string" &&
       mongoose.Types.ObjectId.isValid(budgetId)
     ) {
       const budgetObjectId = new mongoose.Types.ObjectId(budgetId);
-      finalQuery = {
-        ...baseQuery,
-        $or: [
-          // Include activities directly related to this budget (e.g., budget items)
-          { "details.budgetId": budgetObjectId },
-          // Include all transaction-related activities, as they don't have budgetId in details
-          {
-            actionType: {
-              $in: [
-                "transaction_created",
-                "transaction_updated",
-                "transaction_deleted",
-              ],
+      query.$and = [
+        {
+          $or: [
+            // Always show general group activities (e.g., group created, member invited/removed)
+            {
+              actionType: {
+                $in: [
+                  "group_created",
+                  "group_updated",
+                  "group_deleted",
+                  "member_invited",
+                  "member_removed",
+                ],
+              },
             },
-          },
-        ],
-      };
+            // Always show budget creation/deletion activities
+            { actionType: { $in: ["budget_created", "budget_deleted"] } },
+            // Always show all transaction activities for the group (as they are part of the overall financial flow)
+            {
+              actionType: {
+                $in: [
+                  "transaction_created",
+                  "transaction_updated",
+                  "transaction_deleted",
+                ],
+              },
+            },
+            // Show budget item activities only if they are linked to the selected budget
+            {
+              actionType: {
+                $in: [
+                  "budget_item_created",
+                  "budget_item_updated",
+                  "budget_item_deleted",
+                ],
+              },
+              "details.budgetId": budgetObjectId,
+            },
+          ],
+        },
+      ];
     }
 
-    const activities: IActivityLog[] = await ActivityLog.find(finalQuery)
+    const activities: IActivityLog[] = await ActivityLog.find(query)
       .sort({ createdAt: -1 })
       .limit(parseInt(limit as string))
       .skip(parseInt(skip as string));

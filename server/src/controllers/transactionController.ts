@@ -106,16 +106,10 @@ export const getTransactionsByGroup = async (
       data: -1,
     });
 
-    if (transactions.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: "Nenhum lançamento encontrado para este grupo.",
-      });
-    }
-
+    // Alterado para retornar 200 OK com array vazio se não houver lançamentos
     res.status(200).json({
       success: true,
-      data: transactions,
+      data: transactions, // Será um array vazio se nenhum lançamento for encontrado
       message: "Lançamentos recuperados com sucesso.",
     });
   } catch (error: any) {
