@@ -103,11 +103,12 @@ export const getTransactionsByGroup = async (
       data: -1,
     });
 
-    transactions.slice(0, 5).forEach((t, i) => {
-      console.log(
-        `  [${i}] Category: ${t.categoria}, Type: ${t.tipo}, Valor: ${t.valor}`
-      );
-    });
+    if (transactions.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: "Nenhum lançamento encontrado para este grupo.",
+      });
+    }
 
     res.status(200).json({
       success: true,
