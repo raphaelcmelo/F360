@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import ms from 'ms';
 import User from "../models/User";
 import Group from "../models/Group"; // Import the new Group model
 import Token from "../models/Token"; // Import the new Token model
@@ -17,7 +18,7 @@ import { z } from "zod"; // Import Zod for schema parsing
 
 const generateToken = (userId: string): string => {
   return jwt.sign({ userId }, process.env.JWT_SECRET as string, {
-    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+    expiresIn: process.env.JWT_ACCESS_TOKEN_EXPIRES_IN || "15m", // Use access token expiry
   });
 };
 
@@ -130,10 +131,9 @@ export const login = async (
   try {
     const validatedData = LoginSchema.parse(req.body);
 
-    // Populate the 'grupos' field when fetching the user
     const user = await User.findOne({ email: validatedData.email })
-      .select("+password") // Explicitly select password for comparison
-      .populate("grupos.groupId"); // Populate the groups
+      .select("+password")
+      .populate("grupos.groupId");
 
     if (!user || !user.isActive) {
       res.status(401).json({
@@ -152,22 +152,44 @@ export const login = async (
       return;
     }
 
-    const token = generateToken(user._id);
+    // Generate Access Token
+    const accessToken = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET as string,
+      { expiresIn: process.env.JWT_ACCESS_TOKEN_EXPIRES_IN || "15m" }
+    );
 
-    // Convert user document to a plain object and remove the password field
+    // Generate Refresh Token
+    const refreshToken = crypto.randomBytes(64).toString("hex");
+    const hashedRefreshToken = crypto
+      .createHash("sha256")
+      .update(refreshToken)
+      .digest("hex");
+
+    const refreshTokenExpiresIn = process.env.JWT_REFRESH_TOKEN_EXPIRES_IN || "7d";
+    const refreshTokenExpiresAt = new Date(Date.now() + ms(refreshTokenExpiresIn));
+
+    await Token.create({
+      userId: user._id,
+      token: hashedRefreshToken,
+      type: "sessionRefreshToken",
+      expiresAt: refreshTokenExpiresAt,
+    });
+
     const userObject = user.toJSON();
     delete userObject.password;
 
     res.json({
       success: true,
       data: {
-        user: userObject, // Send the user object without the password
-        token,
+        user: userObject,
+        accessToken,
+        refreshToken, // Send the original refresh token to the client
       },
       message: "Login successful",
     });
   } catch (error: any) {
-    if (error.name === "ZodError") {
+    if (error instanceof z.ZodError) { // More specific error handling
       res.status(400).json({
         success: false,
         error: "Validation error",
@@ -175,8 +197,7 @@ export const login = async (
       });
       return;
     }
-
-    console.error("Login Error:", error); // Log the actual error for debugging
+    console.error("Login Error:", error);
     res.status(500).json({
       success: false,
       error: "Server error during login",
@@ -347,17 +368,48 @@ export const resetPassword = async (
 };
 
 export const logout = async (
-  req: AuthenticatedRequest,
+  req: AuthenticatedRequest, // Assuming logout might be an authenticated route
   res: Response<ApiResponse>
 ): Promise<void> => {
   try {
-    // For JWTs, logout is primarily client-side by removing the token.
-    // If using refresh tokens, you might invalidate the refresh token here.
-    // For this implementation, we'll just send a success response.
-    // The client-side will handle clearing the tokens.
+    const { refreshToken } = req.body; // Expect refresh token from client
+
+    if (!refreshToken) {
+      res.status(400).json({
+        success: false,
+        error: "Refresh token is required.",
+      });
+      return;
+    }
+
+    const hashedRefreshToken = crypto
+      .createHash("sha256")
+      .update(refreshToken)
+      .digest("hex");
+
+    // Attempt to delete the token
+    // We include userId in the query if available from an authenticated session
+    // to ensure users can only delete their own tokens.
+    // If req.user is not available (e.g. logout is not an authenticated route),
+    // then we might omit it, but it's less secure as anyone with a valid refresh token could invalidate it.
+    // For now, let's assume req.user might be present.
+    const deleteQuery: any = { token: hashedRefreshToken, type: "sessionRefreshToken" };
+    if (req.user?._id) {
+        deleteQuery.userId = req.user._id;
+    }
+
+    const result = await Token.deleteOne(deleteQuery);
+
+    if (result.deletedCount === 0) {
+      // This could mean the token was already invalid, expired, or doesn't belong to the user (if userId was in query)
+      // For simplicity, we'll still return a success, as the client's goal (being logged out) is achieved.
+      // Alternatively, you could return a 404 or specific message if token not found.
+      console.warn(`Refresh token not found or already invalidated during logout: ${refreshToken.substring(0,10)}...`);
+    }
+
     res.status(200).json({
       success: true,
-      message: "Logout successful",
+      message: "Logout successful. Token invalidated if it existed.",
     });
   } catch (error: any) {
     console.error("Logout Error:", error);
@@ -365,6 +417,58 @@ export const logout = async (
       success: false,
       error: "Server error during logout",
     });
+  }
+};
+
+// Add this function to server/src/controllers/authController.ts
+// Ensure imports for crypto, jwt, Token, ms, Request, Response, ApiResponse are present.
+
+export const refreshToken = async (req: Request, res: Response<ApiResponse>): Promise<void> => {
+  const { token: providedRefreshToken } = req.body; // Assuming client sends { "token": "refreshTokenValue" }
+
+  if (!providedRefreshToken) {
+    res.status(401).json({ success: false, error: "Refresh token not provided" });
+    return;
+  }
+
+  try {
+    const hashedProvidedRefreshToken = crypto
+      .createHash("sha256")
+      .update(providedRefreshToken)
+      .digest("hex");
+
+    // Find the token, ensure it's a sessionRefreshToken and not expired
+    const tokenDoc = await Token.findOne({
+      token: hashedProvidedRefreshToken,
+      type: "sessionRefreshToken",
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!tokenDoc || !tokenDoc.userId) {
+      // If tokenDoc is null or userId is somehow missing (should not happen for sessionRefreshTokens)
+      res.status(403).json({ success: false, error: "Invalid or expired refresh token." });
+      return;
+    }
+
+    // Generate new access token
+    const newAccessToken = jwt.sign(
+      { userId: tokenDoc.userId },
+      process.env.JWT_SECRET as string,
+      { expiresIn: process.env.JWT_ACCESS_TOKEN_EXPIRES_IN || "15m" }
+    );
+
+    res.json({
+      success: true,
+      data: {
+        accessToken: newAccessToken,
+      },
+      message: "Access token refreshed successfully",
+    });
+
+  } catch (error: any) {
+    console.error("Refresh Token Error:", error);
+    // Check if error is ZodError if you parse req.body with Zod, though not shown here for simplicity
+    res.status(500).json({ success: false, error: "Server error during token refresh" });
   }
 };
 export const getUserGroups = async (

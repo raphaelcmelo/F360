@@ -4,7 +4,7 @@ export interface IToken extends Document {
   userId?: mongoose.Types.ObjectId; // Optional, for password reset or registered user invites
   invitedEmail?: string; // For unregistered user invites
   token: string;
-  type: "passwordReset" | "groupInvitation"; // Added groupInvitation type
+  type: "passwordReset" | "groupInvitation" | "sessionRefreshToken"; // Added groupInvitation type
   groupId?: mongoose.Types.ObjectId; // Added for group invitations
   expiresAt: Date;
   createdAt: Date;
@@ -30,7 +30,7 @@ const TokenSchema = new Schema<IToken>(
     type: {
       type: String,
       required: true,
-      enum: ["passwordReset", "groupInvitation"], // Updated enum
+      enum: ["passwordReset", "groupInvitation", "sessionRefreshToken"], // Updated enum
     },
     groupId: {
       type: Schema.Types.ObjectId,
@@ -46,5 +46,7 @@ const TokenSchema = new Schema<IToken>(
     timestamps: true,
   }
 );
+
+TokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 export default mongoose.model<IToken>("Token", TokenSchema);
