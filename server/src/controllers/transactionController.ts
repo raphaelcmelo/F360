@@ -2,8 +2,16 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import Transaction, { ITransaction } from "../models/Transaction";
 import { CreateTransactionSchema, UpdateTransactionSchema } from "../schemas";
-import { AuthenticatedRequest } from "../types"; // Alterado de CustomRequest para AuthenticatedRequest
-import { createActivityLog } from "./activityLogController"; // Import the helper
+import { AuthenticatedRequest } from "../types";
+import { createActivityLog } from "./activityLogController";
+
+// Helper function to format currency to pt-BR
+const formatValueToPtBR = (value: number): string => {
+  return value.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
 
 // @desc    Create a new transaction
 // @route   POST /api/transactions
@@ -42,10 +50,10 @@ export const createTransaction = async (
       "transaction_created",
       `Lançamento de ${newTransaction.categoria} "${
         newTransaction.tipo
-      }" no valor de R$ ${newTransaction.valor.toFixed(2)} criado.`,
+      }" no valor de R$ ${formatValueToPtBR(newTransaction.valor)} criado.`,
       {
         transactionId: newTransaction._id,
-        categoria: newTransaction.categoria, // Corrigido: 'category' para 'categoria'
+        categoria: newTransaction.categoria,
         value: newTransaction.valor,
       }
     );
@@ -75,7 +83,7 @@ export const createTransaction = async (
 // @route   GET /api/transactions/group/:groupId
 // @access  Private
 export const getTransactionsByGroup = async (
-  req: AuthenticatedRequest, // Alterado de CustomRequest para AuthenticatedRequest
+  req: AuthenticatedRequest,
   res: Response
 ) => {
   try {
@@ -106,10 +114,9 @@ export const getTransactionsByGroup = async (
       data: -1,
     });
 
-    // Alterado para retornar 200 OK com array vazio se não houver lançamentos
     res.status(200).json({
       success: true,
-      data: transactions, // Será um array vazio se nenhum lançamento for encontrado
+      data: transactions,
       message: "Lançamentos recuperados com sucesso.",
     });
   } catch (error: any) {
@@ -140,7 +147,6 @@ export const getTransactionById = async (
       });
     }
 
-    // Optional: Add authorization check if the user belongs to the group
     if (!req.user || !transaction.grupoId.equals(req.user.activeGroup || "")) {
       // This check assumes req.user.activeGroup is set, or you'd check group membership
       // For simplicity, we'll just return the transaction if found.
@@ -207,14 +213,12 @@ export const updateTransaction = async (
         req.user.id,
         req.user.name,
         "transaction_updated",
-        `Lançamento "${
-          oldTransaction.tipo
-        }" de R$ ${oldTransaction.valor.toFixed(
-          2
-        )} para R$ ${updatedTransaction.valor.toFixed(2)} atualizado.`,
+        `Lançamento "${oldTransaction.tipo}" de R$ ${formatValueToPtBR(
+          oldTransaction.valor
+        )} para R$ ${formatValueToPtBR(updatedTransaction.valor)} atualizado.`,
         {
           transactionId: updatedTransaction._id,
-          categoria: updatedTransaction.categoria, // Adicionado para coloração no frontend
+          categoria: updatedTransaction.categoria,
           oldValue: oldTransaction.valor,
           newValue: updatedTransaction.valor,
           oldCategory: oldTransaction.categoria,
@@ -279,12 +283,12 @@ export const deleteTransaction = async (
       req.user.id,
       req.user.name,
       "transaction_deleted",
-      `Lançamento "${transaction.tipo}" de R$ ${transaction.valor.toFixed(
-        2
+      `Lançamento "${transaction.tipo}" de R$ ${formatValueToPtBR(
+        transaction.valor
       )} excluído.`,
       {
         transactionId: transaction._id,
-        categoria: transaction.categoria, // Corrigido: 'category' para 'categoria'
+        categoria: transaction.categoria,
         value: transaction.valor,
       }
     );

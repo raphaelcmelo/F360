@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom"; // Import useNavigate
 import {
   Grid,
   Paper,
@@ -53,6 +54,8 @@ export default function Dashboard() {
   const [newGroupName, setNewGroupName] = useState("");
   const [createGroupError, setCreateGroupError] = useState<string | null>(null);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+
+  const navigate = useNavigate(); // Initialize useNavigate
 
   const fetchUserGroups = async () => {
     setIsLoading(true);
@@ -253,6 +256,13 @@ export default function Dashboard() {
     }
   };
 
+  // New handler for card clicks
+  const handleCardClick = (
+    categoryType: "renda" | "despesa" | "conta" | "poupanca"
+  ) => {
+    navigate(`/lancamentos?category=${categoryType}`);
+  };
+
   if (isLoading && !selectedGroupId && !hasNoGroups) {
     return (
       <motion.div
@@ -374,6 +384,7 @@ export default function Dashboard() {
           budget={budget}
           transactions={transactions}
           isLoading={isLoading}
+          onCardClick={handleCardClick} // Pass the handler
         />
         <BudgetSummaryCard
           title="Despesas"
@@ -381,6 +392,7 @@ export default function Dashboard() {
           budget={budget}
           transactions={transactions}
           isLoading={isLoading}
+          onCardClick={handleCardClick} // Pass the handler
         />
         <BudgetSummaryCard
           title="Contas"
@@ -388,6 +400,7 @@ export default function Dashboard() {
           budget={budget}
           transactions={transactions}
           isLoading={isLoading}
+          onCardClick={handleCardClick} // Pass the handler
         />
         <BudgetSummaryCard
           title="Poupança"
@@ -395,6 +408,7 @@ export default function Dashboard() {
           budget={budget}
           transactions={transactions}
           isLoading={isLoading}
+          onCardClick={handleCardClick} // Pass the handler
         />
       </SimpleGrid>
 

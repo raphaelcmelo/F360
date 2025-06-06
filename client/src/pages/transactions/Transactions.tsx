@@ -22,6 +22,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { DatePickerInput } from "@mantine/dates";
 import { useDisclosure } from "@mantine/hooks";
 import { motion } from "framer-motion";
+import { useSearchParams } from "react-router-dom"; // Import useSearchParams
 import {
   IconPlus,
   IconDotsVertical,
@@ -92,6 +93,8 @@ export default function Transactions() {
   const [selectedTransaction, setSelectedTransaction] =
     useState<Transaction | null>(null); // Transaction currently being edited or deleted
 
+  const [searchParams] = useSearchParams(); // Initialize useSearchParams
+
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionSchema),
     defaultValues: {
@@ -144,6 +147,17 @@ export default function Transactions() {
     };
     fetchUserGroups();
   }, []);
+
+  // Effect to read category from URL on initial load
+  useEffect(() => {
+    const categoryParam = searchParams.get("category");
+    if (categoryParam) {
+      // Ensure the category is one of the valid types
+      if (["renda", "despesa", "conta", "poupanca"].includes(categoryParam)) {
+        setSelectedCategory(categoryParam);
+      }
+    }
+  }, [searchParams]); // Re-run when searchParams change
 
   const fetchTransactionsAndBudget = useCallback(async () => {
     if (!selectedGroupId) {

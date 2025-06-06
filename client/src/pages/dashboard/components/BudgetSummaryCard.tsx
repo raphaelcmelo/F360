@@ -17,6 +17,7 @@ interface BudgetSummaryCardProps {
   budget: Budget | null;
   transactions: Transaction[];
   isLoading: boolean;
+  onCardClick: (type: "renda" | "despesa" | "conta" | "poupanca") => void; // New prop
 }
 
 export default function BudgetSummaryCard({
@@ -25,6 +26,7 @@ export default function BudgetSummaryCard({
   budget,
   transactions,
   isLoading,
+  onCardClick, // Destructure new prop
 }: BudgetSummaryCardProps) {
   // Calculate planned total for the category
   const plannedTotal =
@@ -64,7 +66,13 @@ export default function BudgetSummaryCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <Paper p="md" radius="md" withBorder>
+      <Paper
+        p="md"
+        radius="md"
+        withBorder
+        onClick={() => onCardClick(type)} // Add onClick handler
+        style={{ cursor: "pointer" }} // Add cursor style for better UX
+      >
         <Text
           size="sm"
           fw={500}
