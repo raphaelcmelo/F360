@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
+import rateLimit from "express-rate-limit"; // Keep this import as it might be used elsewhere or for future specific limiters
 import connectDB from "./config/database";
 
 // Import routes
@@ -38,17 +38,6 @@ app.use(
 //   legacyHeaders: false,
 // });
 // app.use(limiter);
-
-// General API rate limiter (will apply to all routes if not overridden by more specific limiters in routers)
-const generalApiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200,
-  message: "Too many general API requests from this IP, please try again after 15 minutes",
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use(generalApiLimiter);
-
 // Body parsing middleware
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
