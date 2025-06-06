@@ -48,13 +48,14 @@ export default function BudgetSummaryCard({
 
   // Get color based on type and percentage
   const getColor = () => {
-    if (type === "renda") {
-      return percentage >= 100 ? "green" : "blue";
-    }
-    if (type === "poupanca") {
-      return percentage >= 100 ? "teal" : "blue";
-    }
-    return percentage > 100 ? "red" : percentage > 80 ? "yellow" : "teal";
+    const colorMap: Record<typeof type, string> = {
+      renda: "green",
+      poupanca: "blue",
+      despesa: "red",
+      conta: "orange",
+    };
+
+    return colorMap[type];
   };
 
   return (
@@ -64,7 +65,14 @@ export default function BudgetSummaryCard({
       transition={{ duration: 0.3 }}
     >
       <Paper p="md" radius="md" withBorder>
-        <Text size="sm" fw={500} mb="xs">
+        <Text
+          size="sm"
+          fw={500}
+          mb="xs"
+          color={
+            getColor().replace("dark", "light") // Adjust color for light mode
+          }
+        >
           {title}
         </Text>
 
