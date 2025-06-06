@@ -32,7 +32,7 @@ import { Budget } from "../../types/budget";
 
 export default function History() {
   const navigate = useNavigate();
-  const { user, activeGroup, isLoading: authLoading } = useAuth(); // Adicionado isLoading do AuthContext
+  const { user, activeGroup, isLoading: authLoading } = useAuth();
   const [historyEntries, setHistoryEntries] = useState<ActivityLog[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [selectedBudgetId, setSelectedBudgetId] = useState<string | null>(null);
@@ -41,7 +41,6 @@ export default function History() {
 
   useEffect(() => {
     const fetchBudgets = async () => {
-      // Só busca orçamentos se não estiver carregando a autenticação e se houver usuário e grupo ativo
       if (authLoading || !user || !activeGroup) {
         setBudgets([]);
         setSelectedBudgetId(null);
@@ -62,11 +61,10 @@ export default function History() {
     };
 
     fetchBudgets();
-  }, [user, activeGroup, authLoading]); // Adicionado authLoading às dependências
+  }, [user, activeGroup, authLoading]);
 
   useEffect(() => {
     const fetchHistory = async () => {
-      // Só busca histórico se não estiver carregando a autenticação e se houver usuário e grupo ativo
       if (authLoading || !user || !activeGroup) {
         setLoading(false);
         setError("Nenhum grupo ativo selecionado.");
@@ -92,7 +90,7 @@ export default function History() {
     };
 
     fetchHistory();
-  }, [user, activeGroup, selectedBudgetId, authLoading]); // Adicionado authLoading às dependências
+  }, [user, activeGroup, selectedBudgetId, authLoading]);
 
   const getActivityIcon = (actionType: string) => {
     switch (actionType) {
@@ -169,6 +167,38 @@ export default function History() {
     return "gray";
   };
 
+  const handleItemClick = (item: ActivityLog) => {
+    let path = "";
+    let highlightId = "";
+    let shouldHighlight = false;
+
+    if (item.actionType.startsWith("transaction_")) {
+      path = "/lancamentos";
+      if (item.details?._id) {
+        highlightId = item.details._id;
+        shouldHighlight =
+          item.actionType === "transaction_created" ||
+          item.actionType === "transaction_updated";
+      }
+    } else if (item.actionType.startsWith("budget_item_")) {
+      path = "/orcamento";
+      if (item.details?._id) {
+        highlightId = item.details._id;
+        shouldHighlight =
+          item.actionType === "budget_item_created" ||
+          item.actionType === "budget_item_updated";
+      }
+    }
+
+    if (path) {
+      if (shouldHighlight && highlightId) {
+        navigate(`${path}?highlightId=${highlightId}`);
+      } else {
+        navigate(path);
+      }
+    }
+  };
+
   const renderHistoryItem = (item: ActivityLog) => {
     const formattedDate = new Date(item.createdAt).toLocaleDateString("pt-BR");
     const formattedTime = new Date(item.createdAt).toLocaleTimeString("pt-BR", {
@@ -176,8 +206,18 @@ export default function History() {
       minute: "2-digit",
     });
 
+    const isClickable =
+      item.actionType.startsWith("transaction_") ||
+      item.actionType.startsWith("budget_item_");
+
     return (
-      <Card key={item._id} withBorder mb="sm">
+      <Card
+        key={item._id}
+        withBorder
+        mb="sm"
+        onClick={isClickable ? () => handleItemClick(item) : undefined}
+        style={{ cursor: isClickable ? "pointer" : "default" }}
+      >
         <Group wrap="nowrap" gap="md">
           <ThemeIcon
             size="lg"

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Grid,
   Paper,
@@ -16,6 +16,7 @@ import {
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { motion } from "framer-motion";
+import { useSearchParams } from "react-router-dom";
 import {
   IconDotsVertical,
   IconDownload,
@@ -27,7 +28,7 @@ import {
 import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { budgetApi, plannedBudgetItemApi, groupApi } from "../../services/api"; // Import groupApi
+import { budgetApi, plannedBudgetItemApi, groupApi } from "../../services/api";
 import GroupSelector from "../../components/ui/GroupSelector";
 import { Budget as BudgetType, PlannedBudgetItem } from "../../types/budget";
 import { useAuth } from "../../contexts/AuthContext";
@@ -64,10 +65,10 @@ type EditEntryFormValues = z.infer<typeof editEntrySchema>;
 interface UIBudgetCategory {
   tipo: "renda" | "despesa" | "conta" | "poupanca";
   lancamentosPlanejados: {
-    _id: string; // Add _id for editing/deleting
+    _id: string;
     nome: string;
     valorPlanejado: number;
-    categoryType: "renda" | "despesa" | "conta" | "poupanca"; // Add categoryType for consistency
+    categoryType: "renda" | "despesa" | "conta" | "poupanca";
   }[];
 }
 
@@ -98,7 +99,13 @@ export default function Budget() {
 
   const [selectedItem, setSelectedItem] = useState<PlannedBudgetItem | null>(
     null
-  ); // Item currently being edited or deleted
+  );
+
+  const [searchParams] = useSearchParams();
+  const [highlightedBudgetItemId, setHighlightedBudgetItemId] = useState<
+    string | null
+  >(null);
+  const budgetItemRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   // Form for adding new entries
   const {
@@ -162,6 +169,24 @@ export default function Budget() {
     }
   }, [isAuthLoading, fetchUserGroups]);
 
+  // Effect to handle highlighting from URL
+  useEffect(() => {
+    const highlightId = searchParams.get("highlightId");
+    if (highlightId) {
+      setHighlightedBudgetItemId(highlightId);
+      // Scroll to the item after budget items are loaded and rendered
+      const timer = setTimeout(() => {
+        const element = budgetItemRefs.current[highlightId];
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+          // Remove highlight after a short delay
+          setTimeout(() => setHighlightedBudgetItemId(null), 3000);
+        }
+      }, 500); // Give some time for rendering
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, budget]); // Depend on budget to ensure items are loaded
+
   const fetchBudget = useCallback(async () => {
     if (!selectedGroupId || !user?._id) {
       setBudget(null);
@@ -173,7 +198,7 @@ export default function Budget() {
     try {
       const currentDate = new Date();
       const currentYear = currentDate.getFullYear();
-      const currentMonth = currentDate.getMonth(); // 0-indexed
+      const currentMonth = currentDate.getMonth();
 
       const startDate = new Date(currentYear, currentMonth, 1);
       const endDate = new Date(currentYear, currentMonth + 1, 0);
@@ -206,7 +231,6 @@ export default function Budget() {
         await plannedBudgetItemApi.getPlannedBudgetItemsForBudget(
           currentBudget._id
         );
-      // Transform flat plannedItems into categorized structure for UI, including _id and categoryType
       const transformedBudget: UIBudget = {
         _id: currentBudget._id,
         grupoId: currentBudget.grupoId,
@@ -226,10 +250,10 @@ export default function Budget() {
         );
         if (category) {
           category.lancamentosPlanejados.push({
-            _id: item._id, // Include _id
+            _id: item._id,
             nome: item.nome,
             valorPlanejado: item.valorPlanejado,
-            categoryType: item.categoryType, // Include categoryType
+            categoryType: item.categoryType,
           });
         }
       });
@@ -274,10 +298,10 @@ export default function Budget() {
               lancamentosPlanejados: [
                 ...category.lancamentosPlanejados,
                 {
-                  _id: newPlannedItem._id, // Include _id
+                  _id: newPlannedItem._id,
                   nome: newPlannedItem.nome,
                   valorPlanejado: newPlannedItem.valorPlanejado,
-                  categoryType: newPlannedItem.categoryType, // Include categoryType
+                  categoryType: newPlannedItem.categoryType,
                 },
               ],
             };
@@ -320,7 +344,6 @@ export default function Budget() {
         if (!prevBudget) return null;
 
         const updatedCategories = prevBudget.categorias.map((category) => {
-          // If the category type changed, remove from old category and add to new
           if (
             category.tipo === selectedItem.categoryType &&
             category.tipo !== updatedItem.categoryType
@@ -332,7 +355,6 @@ export default function Budget() {
               ),
             };
           } else if (category.tipo === updatedItem.categoryType) {
-            // Update existing item or add to new category
             const itemIndex = category.lancamentosPlanejados.findIndex(
               (item) => item._id === updatedItem._id
             );
@@ -346,7 +368,6 @@ export default function Budget() {
               };
               return { ...category, lancamentosPlanejados: newLancamentos };
             } else {
-              // Item moved to this category
               return {
                 ...category,
                 lancamentosPlanejados: [
@@ -563,6 +584,16 @@ export default function Budget() {
                           key={item._id}
                           justify="space-between"
                           wrap="nowrap"
+                          ref={(el) => (budgetItemRefs.current[item._id] = el)}
+                          style={{
+                            transition: "background-color 0.5s ease-in-out",
+                            backgroundColor:
+                              highlightedBudgetItemId === item._id
+                                ? "var(--mantine-color-yellow-light)"
+                                : "transparent",
+                            borderRadius: "var(--mantine-radius-sm)",
+                            padding: "var(--mantine-spacing-xs)",
+                          }}
                         >
                           <Text size="sm" className="truncate">
                             {item.nome}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Paper,
   Text,
@@ -22,7 +22,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { DatePickerInput } from "@mantine/dates";
 import { useDisclosure } from "@mantine/hooks";
 import { motion } from "framer-motion";
-import { useSearchParams } from "react-router-dom"; // Import useSearchParams
+import { useSearchParams } from "react-router-dom";
 import {
   IconPlus,
   IconDotsVertical,
@@ -37,7 +37,7 @@ import {
   transactionApi,
   budgetApi,
   plannedBudgetItemApi,
-  groupApi, // Import groupApi
+  groupApi,
 } from "../../services/api";
 import GroupSelector from "../../components/ui/GroupSelector";
 import { Transaction } from "../../types/transaction";
@@ -49,7 +49,7 @@ import {
 } from "../../types/budget";
 import CurrencyInput from "../../components/ui/CurrencyInput";
 import { notifications } from "@mantine/notifications";
-import { Group as UserGroup } from "../../types/group"; // Import Group type for user groups
+import { Group as UserGroup } from "../../types/group";
 
 // Define the schema for the transaction form
 const transactionSchema = z.object({
@@ -74,8 +74,8 @@ const updateTransactionSchema = z.object({
 type UpdateTransactionFormValues = z.infer<typeof updateTransactionSchema>;
 
 export default function Transactions() {
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null); // Initialize as null
-  const [userGroups, setUserGroups] = useState<UserGroup[]>([]); // State to store user's groups
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [userGroups, setUserGroups] = useState<UserGroup[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -91,9 +91,15 @@ export default function Transactions() {
     { open: openDeleteModal, close: closeDeleteModal },
   ] = useDisclosure(false);
   const [selectedTransaction, setSelectedTransaction] =
-    useState<Transaction | null>(null); // Transaction currently being edited or deleted
+    useState<Transaction | null>(null);
 
-  const [searchParams] = useSearchParams(); // Initialize useSearchParams
+  const [searchParams] = useSearchParams();
+  const [highlightedTransactionId, setHighlightedTransactionId] = useState<
+    string | null
+  >(null);
+  const transactionRefs = useRef<{ [key: string]: HTMLTableRowElement | null }>(
+    {}
+  );
 
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionSchema),
@@ -115,8 +121,8 @@ export default function Transactions() {
     },
   });
 
-  const watchedCategory = form.watch("categoria"); // Watch the category field for dynamic filtering
-  const watchedEditCategory = editForm.watch("categoria"); // Watch the category field for dynamic filtering in edit modal
+  const watchedCategory = form.watch("categoria");
+  const watchedEditCategory = editForm.watch("categoria");
 
   // Fetch user groups on component mount
   useEffect(() => {
@@ -125,7 +131,7 @@ export default function Transactions() {
         const groups = await groupApi.getUserGroups();
         setUserGroups(groups);
         if (groups.length > 0) {
-          setSelectedGroupId(groups[0]._id); // Set the first group as default
+          setSelectedGroupId(groups[0]._id);
         } else {
           notifications.show({
             title: "Atenção",
@@ -133,7 +139,7 @@ export default function Transactions() {
               "Você não possui grupos. Crie um grupo para gerenciar lançamentos.",
             color: "yellow",
           });
-          setIsLoading(false); // Stop loading if no groups
+          setIsLoading(false);
         }
       } catch (error) {
         console.error("Error fetching user groups:", error);
@@ -152,12 +158,29 @@ export default function Transactions() {
   useEffect(() => {
     const categoryParam = searchParams.get("category");
     if (categoryParam) {
-      // Ensure the category is one of the valid types
       if (["renda", "despesa", "conta", "poupanca"].includes(categoryParam)) {
         setSelectedCategory(categoryParam);
       }
     }
-  }, [searchParams]); // Re-run when searchParams change
+  }, [searchParams]);
+
+  // Effect to handle highlighting from URL
+  useEffect(() => {
+    const highlightId = searchParams.get("highlightId");
+    if (highlightId) {
+      setHighlightedTransactionId(highlightId);
+      // Scroll to the item after transactions are loaded and rendered
+      const timer = setTimeout(() => {
+        const element = transactionRefs.current[highlightId];
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+          // Remove highlight after a short delay
+          setTimeout(() => setHighlightedTransactionId(null), 3000);
+        }
+      }, 500); // Give some time for rendering
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, transactions]); // Depend on transactions to ensure they are loaded
 
   const fetchTransactionsAndBudget = useCallback(async () => {
     if (!selectedGroupId) {
@@ -174,12 +197,10 @@ export default function Transactions() {
       const startDate = new Date(currentYear, currentMonth, 1).toISOString();
       const endDate = new Date(currentYear, currentMonth + 1, 0).toISOString();
 
-      // Fetch all budgets for the selected group
       const groupBudgets = await budgetApi.getGroupBudgets(selectedGroupId);
 
       let currentMonthBudget: BudgetType | null = null;
 
-      // Find the budget for the current month
       for (const b of groupBudgets) {
         const budgetStartDate = new Date(b.dataInicio);
         if (
@@ -193,13 +214,11 @@ export default function Transactions() {
 
       let fetchedBudget: BudgetType | null = null;
       if (currentMonthBudget) {
-        // If a budget for the current month exists, fetch its detailed planned items
         const plannedItems: PlannedBudgetItem[] =
           await plannedBudgetItemApi.getPlannedBudgetItemsForBudget(
             currentMonthBudget._id
           );
 
-        // Transform flat plannedItems into categorized structure for UI
         const transformedCategories: BudgetCategory[] = [
           { tipo: "renda", lancamentosPlanejados: [] },
           { tipo: "despesa", lancamentosPlanejados: [] },
@@ -216,7 +235,6 @@ export default function Transactions() {
           }
         });
 
-        // Calculate aggregated planned totals (optional, but good for consistency)
         const totalRendaPlanejado =
           transformedCategories
             .find((c) => c.tipo === "renda")
@@ -255,13 +273,12 @@ export default function Transactions() {
           totalPoupancaPlanejado,
         };
       } else {
-        // If no budget for the current month, set a default empty budget structure
         fetchedBudget = {
-          _id: "", // Placeholder
+          _id: "",
           grupoId: selectedGroupId,
           dataInicio: new Date(currentYear, currentMonth, 1).toISOString(),
           dataFim: new Date(currentYear, currentMonth + 1, 0).toISOString(),
-          criadoPor: "", // Placeholder
+          criadoPor: "",
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           categorias: [
@@ -295,14 +312,13 @@ export default function Transactions() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedGroupId]); // Depend on selectedGroupId
+  }, [selectedGroupId]);
 
   useEffect(() => {
-    // Only fetch transactions and budget if selectedGroupId is not null
     if (selectedGroupId) {
       fetchTransactionsAndBudget();
     }
-  }, [selectedGroupId, fetchTransactionsAndBudget]); // Re-fetch when selectedGroupId changes
+  }, [selectedGroupId, fetchTransactionsAndBudget]);
 
   const handleSubmit = async (values: TransactionFormValues) => {
     if (!selectedGroupId) {
@@ -359,7 +375,7 @@ export default function Transactions() {
     try {
       const updates = {
         ...values,
-        data: values.data ? values.data.toISOString() : undefined, // Convert Date to ISO string
+        data: values.data ? values.data.toISOString() : undefined,
       };
 
       const updatedTransaction = await transactionApi.updateTransaction(
@@ -432,12 +448,11 @@ export default function Transactions() {
     (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()
   );
 
-  // Filter available types based on the watched category for new transaction form
   const availableTypesNew = budget
     ? Array.from(
         new Set(
           budget.categorias
-            .filter((category) => category.tipo === watchedCategory) // Filter by selected category
+            .filter((category) => category.tipo === watchedCategory)
             .flatMap((category) =>
               category.lancamentosPlanejados.map(
                 (item: PlannedItem) => item.nome
@@ -447,12 +462,11 @@ export default function Transactions() {
       ).map((type) => ({ value: type, label: type }))
     : [];
 
-  // Filter available types based on the watched category for edit transaction form
   const availableTypesEdit = budget
     ? Array.from(
         new Set(
           budget.categorias
-            .filter((category) => category.tipo === watchedEditCategory) // Filter by selected category
+            .filter((category) => category.tipo === watchedEditCategory)
             .flatMap((category) =>
               category.lancamentosPlanejados.map(
                 (item: PlannedItem) => item.nome
@@ -471,9 +485,9 @@ export default function Transactions() {
     >
       <Group justify="space-between" mb="xl">
         <GroupSelector
-          value={selectedGroupId || ""} // Pass empty string if null
+          value={selectedGroupId || ""}
           onChange={setSelectedGroupId}
-          groups={userGroups} // Pass the fetched groups to GroupSelector
+          groups={userGroups}
         />
 
         <Group>
@@ -481,7 +495,7 @@ export default function Transactions() {
             variant="filled"
             leftSection={<IconPlus size={16} />}
             onClick={() => setIsModalOpen(true)}
-            disabled={!selectedGroupId} // Disable if no group is selected
+            disabled={!selectedGroupId}
           >
             Novo Lançamento
           </Button>
@@ -489,8 +503,8 @@ export default function Transactions() {
           <Button
             variant="light"
             leftSection={<IconRefresh size={16} />}
-            onClick={fetchTransactionsAndBudget} // Refresh from backend
-            disabled={!selectedGroupId} // Disable if no group is selected
+            onClick={fetchTransactionsAndBudget}
+            disabled={!selectedGroupId}
           >
             Atualizar
           </Button>
@@ -519,7 +533,7 @@ export default function Transactions() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{ flex: 1 }}
-            disabled={!selectedGroupId} // Disable if no group is selected
+            disabled={!selectedGroupId}
           />
 
           <Select
@@ -534,7 +548,7 @@ export default function Transactions() {
               { value: "conta", label: "Contas" },
               { value: "poupanca", label: "Poupança" },
             ]}
-            disabled={!selectedGroupId} // Disable if no group is selected
+            disabled={!selectedGroupId}
           />
         </Group>
 
@@ -561,13 +575,13 @@ export default function Transactions() {
                   </Center>
                 </Table.Td>
               </Table.Tr>
-            ) : sortedTransactions.length === 0 && selectedGroupId ? ( // Show "Nenhum lançamento" only if a group is selected
+            ) : sortedTransactions.length === 0 && selectedGroupId ? (
               <Table.Tr>
                 <Table.Td colSpan={6} style={{ textAlign: "center" }}>
                   <Text c="dimmed">Nenhum lançamento encontrado</Text>
                 </Table.Td>
               </Table.Tr>
-            ) : !selectedGroupId ? ( // Show message if no group is selected
+            ) : !selectedGroupId ? (
               <Table.Tr>
                 <Table.Td colSpan={6} style={{ textAlign: "center" }}>
                   <Text c="dimmed">
@@ -577,7 +591,17 @@ export default function Transactions() {
               </Table.Tr>
             ) : (
               sortedTransactions.map((transaction) => (
-                <Table.Tr key={transaction._id}>
+                <Table.Tr
+                  key={transaction._id}
+                  ref={(el) => (transactionRefs.current[transaction._id] = el)}
+                  style={{
+                    transition: "background-color 0.5s ease-in-out",
+                    backgroundColor:
+                      highlightedTransactionId === transaction._id
+                        ? "var(--mantine-color-yellow-light)"
+                        : "transparent",
+                  }}
+                >
                   <Table.Td>
                     {new Date(transaction.data).toLocaleDateString("pt-BR")}
                   </Table.Td>
@@ -657,7 +681,7 @@ export default function Transactions() {
         opened={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
-          form.reset(); // Reset form on close
+          form.reset();
         }}
         title="Novo Lançamento"
         size="md"
@@ -678,7 +702,7 @@ export default function Transactions() {
                     placeholder="Selecione a data"
                     error={form.formState.errors.data?.message}
                     {...field}
-                    value={field.value ? new Date(field.value) : null} // Ensure Date object for DatePickerInput
+                    value={field.value ? new Date(field.value) : null}
                     onChange={(val) => field.onChange(val)}
                   />
                 )}
@@ -711,7 +735,7 @@ export default function Transactions() {
                     label="Tipo"
                     required
                     placeholder="Selecione o tipo de lançamento"
-                    data={availableTypesNew} // Now filtered by watchedCategory
+                    data={availableTypesNew}
                     searchable
                     clearable
                     nothingFoundMessage="Nenhum tipo encontrado para esta categoria. Crie em Orçamento."
