@@ -2,13 +2,16 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import Transaction, { ITransaction } from "../models/Transaction";
 import { CreateTransactionSchema, UpdateTransactionSchema } from "../schemas";
-import { CustomRequest } from "../middleware/authMiddleware";
+import { AuthenticatedRequest } from "../types"; // Alterado de CustomRequest para AuthenticatedRequest
 import { createActivityLog } from "./activityLogController"; // Import the helper
 
 // @desc    Create a new transaction
 // @route   POST /api/transactions
 // @access  Private
-export const createTransaction = async (req: CustomRequest, res: Response) => {
+export const createTransaction = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   try {
     const validatedData = CreateTransactionSchema.parse(req.body);
 
@@ -42,7 +45,7 @@ export const createTransaction = async (req: CustomRequest, res: Response) => {
       }" no valor de R$ ${newTransaction.valor.toFixed(2)} criado.`,
       {
         transactionId: newTransaction._id,
-        category: newTransaction.categoria,
+        categoria: newTransaction.categoria, // Corrigido: 'category' para 'categoria'
         value: newTransaction.valor,
       }
     );
@@ -72,7 +75,7 @@ export const createTransaction = async (req: CustomRequest, res: Response) => {
 // @route   GET /api/transactions/group/:groupId
 // @access  Private
 export const getTransactionsByGroup = async (
-  req: CustomRequest,
+  req: AuthenticatedRequest, // Alterado de CustomRequest para AuthenticatedRequest
   res: Response
 ) => {
   try {
@@ -127,7 +130,10 @@ export const getTransactionsByGroup = async (
 // @desc    Get a single transaction by ID
 // @route   GET /api/transactions/:id
 // @access  Private
-export const getTransactionById = async (req: CustomRequest, res: Response) => {
+export const getTransactionById = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   try {
     const { id } = req.params;
 
@@ -164,7 +170,10 @@ export const getTransactionById = async (req: CustomRequest, res: Response) => {
 // @desc    Update a transaction
 // @route   PUT /api/transactions/:id
 // @access  Private
-export const updateTransaction = async (req: CustomRequest, res: Response) => {
+export const updateTransaction = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   try {
     const { id } = req.params;
     const validatedData = UpdateTransactionSchema.parse(req.body);
@@ -211,6 +220,7 @@ export const updateTransaction = async (req: CustomRequest, res: Response) => {
         )} para R$ ${updatedTransaction.valor.toFixed(2)} atualizado.`,
         {
           transactionId: updatedTransaction._id,
+          categoria: updatedTransaction.categoria, // Adicionado para coloração no frontend
           oldValue: oldTransaction.valor,
           newValue: updatedTransaction.valor,
           oldCategory: oldTransaction.categoria,
@@ -243,7 +253,10 @@ export const updateTransaction = async (req: CustomRequest, res: Response) => {
 // @desc    Delete a transaction
 // @route   DELETE /api/transactions/:id
 // @access  Private
-export const deleteTransaction = async (req: CustomRequest, res: Response) => {
+export const deleteTransaction = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   try {
     const { id } = req.params;
 
@@ -277,7 +290,7 @@ export const deleteTransaction = async (req: CustomRequest, res: Response) => {
       )} excluído.`,
       {
         transactionId: transaction._id,
-        category: transaction.categoria,
+        categoria: transaction.categoria, // Corrigido: 'category' para 'categoria'
         value: transaction.valor,
       }
     );

@@ -1,27 +1,53 @@
-import mongoose, { Schema, Document } from "mongoose";
+import { Schema, model, Document, Types } from "mongoose";
 
 export interface IActivityLog extends Document {
-  grupoId: mongoose.Types.ObjectId;
-  criadoPor: mongoose.Types.ObjectId;
+  grupoId: Types.ObjectId;
+  criadoPor: Types.ObjectId;
   criadoPorNome: string;
-  actionType: string; // e.g., 'transaction_created', 'budget_item_updated', 'member_invited'
-  description: string; // Human-readable description
-  details?: Record<string, any>; // Optional: JSON for specific details (oldValue, newValue, itemId, etc.)
+  actionType: string;
+  description: string;
+  details?: Record<string, any>; // Allow flexible details object
   createdAt: Date;
+  updatedAt: Date;
 }
 
 const ActivityLogSchema = new Schema<IActivityLog>(
   {
-    grupoId: { type: Schema.Types.ObjectId, ref: "Group", required: true },
-    criadoPor: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    criadoPorNome: { type: String, required: true },
-    actionType: { type: String, required: true },
-    description: { type: String, required: true },
-    details: { type: Schema.Types.Mixed }, // Flexible field for additional data
+    grupoId: {
+      type: Schema.Types.ObjectId,
+      ref: "Group",
+      required: true,
+    },
+    criadoPor: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    criadoPorNome: {
+      type: String,
+      required: true,
+    },
+    actionType: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    description: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 500,
+    },
+    details: {
+      type: Schema.Types.Mixed, // Use Mixed to allow any type of object
+      default: {},
+    },
   },
   {
-    timestamps: true, // Adds createdAt and updatedAt
+    timestamps: true,
   }
 );
 
-export default mongoose.model<IActivityLog>("ActivityLog", ActivityLogSchema);
+const ActivityLog = model<IActivityLog>("ActivityLog", ActivityLogSchema);
+
+export default ActivityLog;

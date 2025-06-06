@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import ActivityLog, { IActivityLog } from "../models/ActivityLog";
-import { CustomRequest } from "../middleware/authMiddleware";
+import { AuthenticatedRequest } from "../types"; // Corrigido: Importar AuthenticatedRequest de types
 import mongoose from "mongoose";
 
 /**
@@ -30,16 +30,16 @@ export const createActivityLog = async (
   }
 };
 
-// @desc    Get activity logs for a specific group
+// @desc    Get activity logs for a specific group, optionally filtered by budget
 // @route   GET /api/activities/group/:groupId
 // @access  Private
 export const getActivitiesByGroup = async (
-  req: CustomRequest,
+  req: AuthenticatedRequest, // Corrigido: Usar AuthenticatedRequest
   res: Response
 ) => {
   try {
     const { groupId } = req.params;
-    const { limit = 20, skip = 0 } = req.query; // Pagination options
+    const { limit = 20, skip = 0, budgetId } = req.query;
 
     if (!groupId) {
       return res.status(400).json({
@@ -48,8 +48,6 @@ export const getActivitiesByGroup = async (
       });
     }
 
-    // Ensure the user is part of the group before fetching activities
-    // This check assumes req.user.grupos contains the groups the user is a member of
     if (
       !req.user ||
       !req.user.grupos.some((g) => g.groupId.toString() === groupId)
@@ -60,10 +58,40 @@ export const getActivitiesByGroup = async (
       });
     }
 
-    const activities: IActivityLog[] = await ActivityLog.find({
+    const baseQuery: any = {
       grupoId: groupId,
-    })
-      .sort({ createdAt: -1 }) // Sort by most recent first
+    };
+
+    let finalQuery: any = baseQuery;
+
+    // If budgetId is provided, apply a more complex filter
+    if (
+      budgetId &&
+      typeof budgetId === "string" &&
+      mongoose.Types.ObjectId.isValid(budgetId)
+    ) {
+      const budgetObjectId = new mongoose.Types.ObjectId(budgetId);
+      finalQuery = {
+        ...baseQuery,
+        $or: [
+          // Include activities directly related to this budget (e.g., budget items)
+          { "details.budgetId": budgetObjectId },
+          // Include all transaction-related activities, as they don't have budgetId in details
+          {
+            actionType: {
+              $in: [
+                "transaction_created",
+                "transaction_updated",
+                "transaction_deleted",
+              ],
+            },
+          },
+        ],
+      };
+    }
+
+    const activities: IActivityLog[] = await ActivityLog.find(finalQuery)
+      .sort({ createdAt: -1 })
       .limit(parseInt(limit as string))
       .skip(parseInt(skip as string));
 
