@@ -29,45 +29,50 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // If the error is 401 and we haven't already tried to refresh
-    if (error.response.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
+    // Check if the error is due to an expired token (e.g., status 401)
+    // And if the request hasn't been retried already
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true; // Mark the request as retried
 
       try {
-        // In a real implementation, this would call your refresh token endpoint
         const refreshToken = localStorage.getItem("refreshToken");
 
         if (!refreshToken) {
-          // If no refresh token, redirect to login
-          localStorage.removeItem("token");
-          window.location.href = "/login";
-          return Promise.reject(error);
+          localStorage.removeItem("token"); // Clear current access token
+          // window.location.href = "/login"; // Handled by AuthContext or router
+          return Promise.reject(new Error("No refresh token available")); // Reject to allow AuthContext to handle redirect
         }
 
-        // This would be a real API call in a production app
-        // const response = await axios.post('/api/auth/refresh-token', { refreshToken });
-        // const { token } = response.data;
+        // Actual API call to refresh token
+        const refreshResponse = await api.post("/auth/refresh-token", { token: refreshToken });
 
-        // Mock a successful token refresh
-        const token = "new-mock-token"; // Replace with actual refresh token logic
+        if (refreshResponse.data && refreshResponse.data.success && refreshResponse.data.data.accessToken) {
+          const newAccessToken = refreshResponse.data.data.accessToken;
+          localStorage.setItem("token", newAccessToken); // Store new access token
 
-        // Update stored token
-        localStorage.setItem("token", token);
+          // Update Authorization header for the original request
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
 
-        // Update Authorization header
-        originalRequest.headers.Authorization = `Bearer ${token}`;
-
-        // Retry the original request
-        return api(originalRequest);
-      } catch (refreshError) {
-        // If refresh token fails, redirect to login
+          // Retry the original request with the new token
+          return api(originalRequest);
+        } else {
+          // If refresh call fails in an unexpected way (e.g. bad response structure)
+          localStorage.removeItem("token");
+          localStorage.removeItem("refreshToken");
+          // window.location.href = "/login"; // Handled by AuthContext or router
+          return Promise.reject(new Error("Failed to refresh token"));
+        }
+      } catch (refreshError: any) {
+        // If /auth/refresh-token itself returns an error (e.g., 401, 403)
         localStorage.removeItem("token");
         localStorage.removeItem("refreshToken");
-        window.location.href = "/login";
+        // window.location.href = "/login"; // Handled by AuthContext or router
+        // Propagate the error so that AuthContext can react (e.g. redirect to login)
         return Promise.reject(refreshError);
       }
     }
 
+    // For other errors, just pass them on
     return Promise.reject(error);
   }
 );
@@ -76,7 +81,12 @@ api.interceptors.response.use(
 export const authApi = {
   login: async (email: string, password: string) => {
     const response = await api.post("/auth/login", { email, password });
-    return response.data.data; // Assuming data contains user and token
+    // Assuming backend response is: { success: true, data: { user, accessToken, refreshToken }, message: "..." }
+    if (response.data && response.data.success) {
+      return response.data.data; // This will be { user, accessToken, refreshToken }
+    } else {
+      throw new Error(response.data.error || "Login failed");
+    }
   },
 
   register: async (name: string, email: string, password: string) => {
@@ -105,9 +115,19 @@ export const authApi = {
     return response.data;
   },
 
-  logout: async () => {
-    const response = await api.post("/auth/logout");
-    return response.data;
+  logout: async (refreshToken: string | null) => { // refreshToken can be null if not found
+    // Backend expects { refreshToken: "value" }
+    // Only call if refreshToken is available, though backend logout can also be called without it
+    // to signify client-side logout if server session management is not critical path for this call.
+    // However, our plan is to invalidate the refresh token on the server.
+    if (refreshToken) {
+      const response = await api.post("/auth/logout", { refreshToken });
+      return response.data;
+    } else {
+      // If no refresh token, perhaps just resolve indicating client-side cleanup
+      // Or throw an error if server-side invalidation is critical here
+      return Promise.resolve({ success: true, message: "Logged out client-side (no refresh token to invalidate)." });
+    }
   },
 };
 

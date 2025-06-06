@@ -76,47 +76,43 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const checkAuth = useCallback(async () => {
     setIsLoading(true);
     const token = localStorage.getItem("token");
-    const refreshToken = localStorage.getItem("refreshToken");
+    const storedRefreshToken = localStorage.getItem("refreshToken"); // Renamed for clarity
 
-    if (!token || isTokenExpired(token)) {
-      if (!refreshToken || isTokenExpired(refreshToken)) {
+    if (!token || isTokenExpired(token)) { // If access token is missing or expired
+      if (!storedRefreshToken || isTokenExpired(storedRefreshToken)) { // And refresh token is also missing or expired
         setUser(null);
-        setActiveGroupState(null); // Clear active group on logout
+        setActiveGroupState(null);
+        localStorage.removeItem("token"); // Ensure cleared
+        localStorage.removeItem("refreshToken"); // Ensure cleared
         setIsLoading(false);
+        // No navigation here, navigation should be handled by protected route components
         return;
       }
-
-      try {
-        const userData = await authApi.getProfile();
-        setUser(userData);
-        if (userData.grupos && userData.grupos.length > 0) {
-          setActiveGroupState(userData.grupos[0].groupId._id); // Set first group as active
-        } else {
-          setActiveGroupState(null);
-        }
-      } catch (error) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("refreshToken");
-        setUser(null);
-        setActiveGroupState(null); // Clear active group on error
-      }
-    } else {
-      try {
-        const userData = await authApi.getProfile();
-        setUser(userData);
-        if (userData.grupos && userData.grupos.length > 0) {
-          setActiveGroupState(userData.grupos[0].groupId._id); // Set first group as active
-        } else {
-          setActiveGroupState(null);
-        }
-      } catch (error) {
-        setUser(null);
-        setActiveGroupState(null); // Clear active group on error
-      }
+      // If access token is bad, but refresh token might be good,
+      // the interceptor in api.ts will handle the refresh when getProfile is called.
     }
 
-    setIsLoading(false);
-  }, []);
+    // If token exists (might be valid or will be refreshed by interceptor)
+    try {
+      // getProfile will trigger the interceptor if token is expired
+      const userData = await authApi.getProfile();
+      setUser(userData);
+      if (userData.grupos && userData.grupos.length > 0) {
+        setActiveGroupState(userData.grupos[0].groupId._id);
+      } else {
+        setActiveGroupState(null);
+      }
+    } catch (error) {
+      // This catch handles failure of getProfile or failure of token refresh via interceptor
+      localStorage.removeItem("token");
+      localStorage.removeItem("refreshToken");
+      setUser(null);
+      setActiveGroupState(null);
+      // No navigation here, let protected routes handle it
+    } finally {
+      setIsLoading(false);
+    }
+  }, [navigate, setActiveGroupState]); // Added dependencies based on usage
 
   useEffect(() => {
     checkAuth();
@@ -127,38 +123,31 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       setIsLoading(true);
 
-      const {
-        user: userData,
-        token,
-        refreshToken,
-      } = await authApi.login(email, password);
+      // authApi.login now returns { user, accessToken, refreshToken }
+      const { user: userData, accessToken, refreshToken } = await authApi.login(email, password);
 
-      // Store tokens
-      localStorage.setItem("token", token);
+      localStorage.setItem("token", accessToken); // Store accessToken as 'token'
       localStorage.setItem("refreshToken", refreshToken);
 
-      // Set user data
       setUser(userData);
       if (userData.grupos && userData.grupos.length > 0) {
-        setActiveGroupState(userData.grupos[0].groupId._id); // Set first group as active on login
+        setActiveGroupState(userData.grupos[0].groupId._id);
       } else {
         setActiveGroupState(null);
       }
 
-      // Show success notification
       notifications.show({
         title: "Login realizado com sucesso",
         message: `Bem-vindo(a) ${userData.name}!`,
         color: "green",
       });
-
-      // Navigate to dashboard
       navigate("/dashboard");
     } catch (error: any) {
       notifications.show({
         title: "Erro ao fazer login",
         message:
           error.response?.data?.error ||
+          error.message || // Include error.message for errors from api.ts
           "Verifique suas credenciais e tente novamente.",
         color: "red",
       });
@@ -197,36 +186,44 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   // Logout function
   const logout = async () => {
+    setIsLoading(true); // Set loading true at the beginning
+    const refreshToken = localStorage.getItem("refreshToken");
+
     try {
-      setIsLoading(true);
-      await authApi.logout(); // Call backend logout endpoint
-      localStorage.removeItem("token");
-      localStorage.removeItem("refreshToken");
-      setUser(null);
-      setActiveGroupState(null); // Clear active group on logout
-      navigate("/login");
+      // Attempt to logout from backend, sending the refresh token
+      if (refreshToken) {
+        await authApi.logout(refreshToken);
+      } else {
+        // If no refresh token, still proceed with client-side logout
+        console.warn("No refresh token found in localStorage during logout.");
+        // Optionally, call authApi.logout(null) if your api.ts handles it or if you want to notify backend of client-side only logout
+        await authApi.logout(null);
+      }
+
       notifications.show({
         title: "Logout realizado",
         message: "Você saiu da sua conta com sucesso.",
         color: "blue",
       });
+
     } catch (error: any) {
-      console.error("Error during logout:", error);
-      // Even if backend logout fails, clear client-side tokens for security
+      console.error("Error during backend logout:", error);
+      notifications.show({
+        title: "Erro no logout do servidor",
+        message:
+          error.response?.data?.error ||
+          error.message ||
+          "Não foi possível invalidar a sessão no servidor, mas você será deslogado localmente.",
+        color: "orange", // Use orange for warning as client logout will still proceed
+      });
+    } finally {
+      // Always clear local storage and reset state
       localStorage.removeItem("token");
       localStorage.removeItem("refreshToken");
       setUser(null);
-      setActiveGroupState(null); // Clear active group on error
-      navigate("/login");
-      notifications.show({
-        title: "Erro ao fazer logout",
-        message:
-          error.response?.data?.error ||
-          "Ocorreu um erro ao sair da sua conta. Por favor, tente novamente.",
-        color: "red",
-      });
-    } finally {
+      setActiveGroupState(null);
       setIsLoading(false);
+      navigate("/login"); // Ensure navigation to login after all operations
     }
   };
 
