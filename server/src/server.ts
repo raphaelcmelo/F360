@@ -30,11 +30,24 @@ app.use(
 );
 
 // Rate limiting
-const limiter = rateLimit({
+// const limiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 300, // limit each IP to 300 requests per windowMs (temporary increase)
+//   message: "Too many requests from this IP, please try again after 15 minutes",
+//   standardHeaders: true,
+//   legacyHeaders: false,
+// });
+// app.use(limiter);
+
+// General API rate limiter (will apply to all routes if not overridden by more specific limiters in routers)
+const generalApiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: 200,
+  message: "Too many general API requests from this IP, please try again after 15 minutes",
+  standardHeaders: true,
+  legacyHeaders: false,
 });
-app.use(limiter);
+app.use(generalApiLimiter);
 
 // Body parsing middleware
 app.use(express.json({ limit: "10mb" }));
