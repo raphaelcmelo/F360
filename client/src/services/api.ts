@@ -44,9 +44,15 @@ api.interceptors.response.use(
         }
 
         // Actual API call to refresh token
-        const refreshResponse = await api.post("/auth/refresh-token", { token: refreshToken });
+        const refreshResponse = await api.post("/auth/refresh-token", {
+          token: refreshToken,
+        });
 
-        if (refreshResponse.data && refreshResponse.data.success && refreshResponse.data.data.accessToken) {
+        if (
+          refreshResponse.data &&
+          refreshResponse.data.success &&
+          refreshResponse.data.data.accessToken
+        ) {
           const newAccessToken = refreshResponse.data.data.accessToken;
           localStorage.setItem("token", newAccessToken); // Store new access token
 
@@ -115,7 +121,8 @@ export const authApi = {
     return response.data;
   },
 
-  logout: async (refreshToken: string | null) => { // refreshToken can be null if not found
+  logout: async (refreshToken: string | null) => {
+    // refreshToken can be null if not found
     // Backend expects { refreshToken: "value" }
     // Only call if refreshToken is available, though backend logout can also be called without it
     // to signify client-side logout if server session management is not critical path for this call.
@@ -126,7 +133,10 @@ export const authApi = {
     } else {
       // If no refresh token, perhaps just resolve indicating client-side cleanup
       // Or throw an error if server-side invalidation is critical here
-      return Promise.resolve({ success: true, message: "Logged out client-side (no refresh token to invalidate)." });
+      return Promise.resolve({
+        success: true,
+        message: "Logged out client-side (no refresh token to invalidate).",
+      });
     }
   },
 };
@@ -231,7 +241,8 @@ export const transactionApi = {
     data: string,
     categoria: "renda" | "despesa" | "conta" | "poupanca",
     tipo: string,
-    valor: number
+    valor: number,
+    description?: string
   ): Promise<Transaction> => {
     const response = await api.post("/transactions", {
       grupoId,
@@ -239,6 +250,7 @@ export const transactionApi = {
       categoria,
       tipo,
       valor,
+      description,
     });
     return response.data.data;
   },
