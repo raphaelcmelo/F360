@@ -60,6 +60,11 @@ export default function BudgetSummaryCard({
     return colorMap[type];
   };
 
+  // Determine if the goal is exceeded
+  const isGoalExceeded = actualTotal > plannedTotal && plannedTotal > 0;
+  const exceededAmount = actualTotal - plannedTotal;
+  const remainingAmount = plannedTotal - actualTotal;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -92,7 +97,7 @@ export default function BudgetSummaryCard({
         ) : (
           <>
             <Group justify="space-between" align="center" mb="sm" wrap="nowrap">
-              <Stack spacing={2}>
+              <Stack gap={2}>
                 <Text size="xl" fw={700}>
                   R${" "}
                   {actualTotal.toLocaleString("pt-BR", {
@@ -131,6 +136,34 @@ export default function BudgetSummaryCard({
                 }
               />
             </Group>
+            {isGoalExceeded && (
+              <Text
+                size="xs"
+                c={getColor()}
+                mt="sm"
+                style={{ textAlign: "center" }}
+              >
+                Orçamento previsto alcançado. R${" "}
+                {exceededAmount.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}{" "}
+                a mais do que o previsto.
+              </Text>
+            )}
+            {!isGoalExceeded && plannedTotal > 0 && (
+              <Text
+                size="xs"
+                c="dimmed"
+                mt="sm"
+                style={{ textAlign: "center" }}
+              >
+                Dentro do orçamento previsto. Restam R${" "}
+                {remainingAmount.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}{" "}
+                para alcançar o previsto.
+              </Text>
+            )}
           </>
         )}
       </Paper>
