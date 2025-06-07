@@ -63,6 +63,7 @@ export default function RecentTransactionsTable({
         <Table.Tr>
           <Table.Th>Data</Table.Th>
           <Table.Th>Categoria</Table.Th>
+          <Table.Th>Tipo</Table.Th>
           <Table.Th>Descrição</Table.Th>
           <Table.Th style={{ textAlign: "right" }}>Valor</Table.Th>
         </Table.Tr>
@@ -78,6 +79,7 @@ export default function RecentTransactionsTable({
                 </Badge>
               </Table.Td>
               <Table.Td>{transaction.tipo}</Table.Td>
+              <Table.Td>{transaction.description}</Table.Td>
               <Table.Td style={{ textAlign: "right" }}>
                 <Text fw={500} c={getCategoryColor(transaction.categoria)}>
                   R${" "}

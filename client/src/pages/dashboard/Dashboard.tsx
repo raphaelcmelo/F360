@@ -442,19 +442,23 @@ export default function Dashboard() {
           <Paper p="md" radius="md" withBorder>
             <Group justify="space-between" mb="md">
               <Text fw={500}>Transações Recentes</Text>
-              <Button
-                variant="subtle"
-                size="xs"
-                component="a"
-                href="/lancamentos"
-              >
-                Ver todas
-              </Button>
             </Group>
             <RecentTransactionsTable
               transactions={transactions}
               isLoading={isLoading}
             />
+            <Group justify="center" mt="md">
+              <Button
+                variant="light"
+                size="md"
+                color="blue"
+                component="a"
+                href="/lancamentos"
+                radius="md"
+              >
+                Ver todas
+              </Button>
+            </Group>
           </Paper>
         </Grid.Col>
       </Grid>
