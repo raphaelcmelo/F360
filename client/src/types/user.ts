@@ -30,6 +30,7 @@ export interface User {
   name: string;
   email: string;
   grupos: { groupId: string; displayName: string }[]; // Updated to match backend
+  preferredStartDayOfMonth?: number; // New field for user preference
   createdAt: string;
   updatedAt: string;
 }

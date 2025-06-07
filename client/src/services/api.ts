@@ -104,7 +104,7 @@ export const authApi = {
     return response.data;
   },
 
-  getProfile: async () => {
+  getProfile: async (): Promise<User> => { // Specify return type as User
     const response = await api.get("/auth/me");
     return response.data.data; // Assuming data contains user profile
   },
@@ -138,6 +138,14 @@ export const authApi = {
         message: "Logged out client-side (no refresh token to invalidate).",
       });
     }
+  },
+
+  // New API call to update user preferences
+  updateUserPreferences: async (
+    preferences: { preferredStartDayOfMonth?: number }
+  ): Promise<User> => {
+    const response = await api.put("/users/preferences", preferences);
+    return response.data.data;
   },
 };
 

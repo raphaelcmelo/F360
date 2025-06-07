@@ -66,18 +66,18 @@ export const createBudget = async (
     });
 
     // --- Cloning Logic ---
-    // Calculate previous month's dates
-    const prevMonthStartDate = new Date(dataInicio);
-    prevMonthStartDate.setMonth(prevMonthStartDate.getMonth() - 1);
-    prevMonthStartDate.setDate(1); // Set to 1st of previous month
+    // Calculate previous period's dates based on the new budget's period
+    const prevPeriodStartDate = new Date(dataInicio);
+    prevPeriodStartDate.setMonth(prevPeriodStartDate.getMonth() - 1);
 
-    const prevMonthEndDate = new Date(prevMonthStartDate.getFullYear(), prevMonthStartDate.getMonth() + 1, 0); // Last day of previous month
+    const prevPeriodEndDate = new Date(dataFim);
+    prevPeriodEndDate.setMonth(prevPeriodEndDate.getMonth() - 1);
 
-    // Find the budget for the previous month
+    // Find the budget for the previous period
     const previousMonthBudget = await Budget.findOne({
       grupoId,
-      dataInicio: prevMonthStartDate,
-      dataFim: prevMonthEndDate,
+      dataInicio: prevPeriodStartDate,
+      dataFim: prevPeriodEndDate,
     });
 
     if (previousMonthBudget) {

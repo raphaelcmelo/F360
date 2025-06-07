@@ -10,9 +10,10 @@ export interface IUser extends Document {
   isActive: boolean;
   passwordResetToken?: string;
   passwordResetExpires?: Date;
+  grupos?: { groupId: string; displayName: string }[]; // Updated to match client type
+  preferredStartDayOfMonth?: number; // New field
   createdAt: Date;
   updatedAt: Date;
-  grupos?: string[];
   comparePassword(candidatePassword: string): Promise<boolean>;
   // Ensure __v is also included in Omit if it's present in IUser and removed by toJSON
   // However, __v is a Mongoose internal field, not typically defined directly in IUser interface unless needed.

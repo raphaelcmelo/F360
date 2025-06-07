@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import User from '../models/User';
-import { UpdateUserSchema } from '../schemas';
+import { UpdateUserSchema, UpdateUserPreferencesSchema } from '../schemas'; // Import new schema
 import { AuthenticatedRequest, ApiResponse, PaginationQuery } from '../types';
 
 export const getAllUsers = async (req: AuthenticatedRequest, res: Response<ApiResponse>): Promise<void> => {
@@ -97,6 +97,50 @@ export const updateUser = async (req: AuthenticatedRequest, res: Response<ApiRes
     res.status(500).json({
       success: false,
       error: 'Error updating user'
+    });
+  }
+};
+
+// New controller to update user preferences (e.g., preferredStartDayOfMonth)
+export const updateUserPreferences = async (req: AuthenticatedRequest, res: Response<ApiResponse>): Promise<void> => {
+  try {
+    const validatedData = UpdateUserPreferencesSchema.parse(req.body);
+    const userId = req.user?._id;
+
+    if (!userId) {
+      res.status(401).json({ success: false, error: "User not authenticated." });
+      return;
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: validatedData }, // Use $set to update specific fields
+      { new: true, runValidators: true }
+    ).select('-password'); // Exclude password from response
+
+    if (!user) {
+      res.status(404).json({ success: false, error: "User not found." });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: user,
+      message: "User preferences updated successfully.",
+    });
+  } catch (error: any) {
+    if (error.name === "ZodError") {
+      res.status(400).json({
+        success: false,
+        error: "Validation error",
+        details: error.errors,
+      });
+      return;
+    }
+    console.error("Error updating user preferences:", error);
+    res.status(500).json({
+      success: false,
+      error: "Server error updating user preferences.",
     });
   }
 };

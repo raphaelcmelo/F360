@@ -11,6 +11,7 @@ import { notifications } from "@mantine/notifications";
 import { jwtDecode } from "jwt-decode";
 import { authApi } from "../services/api"; // Import authApi
 import { Group } from "../types/group"; // Import Group type
+import { User as UserType } from "../types/user"; // Import UserType from types/user
 
 // Define a type for the structure of each group entry in the user's 'grupos' array from the backend
 interface UserGroupEntry {
@@ -20,7 +21,7 @@ interface UserGroupEntry {
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: UserType | null; // Use UserType from types/user
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -31,6 +32,8 @@ interface AuthContextType {
   checkAuth: () => Promise<void>;
   activeGroup: string | null; // Add activeGroup to context type
   setActiveGroup: (groupId: string | null) => void; // Add setActiveGroup to context type
+  preferredStartDayOfMonth: number; // New: User's preferred start day for budget period
+  setPreferredStartDayOfMonth: (day: number) => Promise<void>; // New: Function to update preference
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,22 +42,12 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-// Update User interface to correctly type 'grupos' based on backend response
-interface User {
-  _id: string;
-  name: string;
-  email: string;
-  role: string;
-  isActive: boolean;
-  grupos: UserGroupEntry[]; // Changed to UserGroupEntry[]
-  createdAt: string;
-  updatedAt: string;
-}
-
 export const AuthProvider = ({ children }: AuthProviderProps) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeGroup, setActiveGroupState] = useState<string | null>(null); // State for active group
+  const [preferredStartDayOfMonth, setPreferredStartDayOfMonthState] =
+    useState<number>(1); // Default to 1
   const navigate = useNavigate();
 
   // Check if token is expired
@@ -72,16 +65,45 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setActiveGroupState(groupId);
   }, []);
 
+  // Set preferred start day of month
+  const setPreferredStartDayOfMonth = useCallback(async (day: number) => {
+    try {
+      // Call API to update user preference
+      const updatedUser = await authApi.updateUserPreferences({
+        preferredStartDayOfMonth: day,
+      });
+      setUser(updatedUser); // Update user in context with new preference
+      setPreferredStartDayOfMonthState(day); // Update local state
+      notifications.show({
+        title: "Preferência salva",
+        message: `Dia de início do período definido para o dia ${day}.`,
+        color: "green",
+      });
+    } catch (error: any) {
+      console.error("Error updating preferred start day:", error);
+      notifications.show({
+        title: "Erro",
+        message:
+          error.response?.data?.error ||
+          "Não foi possível salvar a preferência.",
+        color: "red",
+      });
+    }
+  }, []);
+
   // Check if user is authenticated on initial load
   const checkAuth = useCallback(async () => {
     setIsLoading(true);
     const token = localStorage.getItem("token");
     const storedRefreshToken = localStorage.getItem("refreshToken"); // Renamed for clarity
 
-    if (!token || isTokenExpired(token)) { // If access token is missing or expired
-      if (!storedRefreshToken || isTokenExpired(storedRefreshToken)) { // And refresh token is also missing or expired
+    if (!token || isTokenExpired(token)) {
+      // If access token is missing or expired
+      if (!storedRefreshToken || isTokenExpired(storedRefreshToken)) {
+        // And refresh token is also missing or expired
         setUser(null);
         setActiveGroupState(null);
+        setPreferredStartDayOfMonthState(1); // Reset to default
         localStorage.removeItem("token"); // Ensure cleared
         localStorage.removeItem("refreshToken"); // Ensure cleared
         setIsLoading(false);
@@ -102,17 +124,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       } else {
         setActiveGroupState(null);
       }
+      // Set preferred start day from user data, or default to 1
+      setPreferredStartDayOfMonthState(userData.preferredStartDayOfMonth || 1);
     } catch (error) {
       // This catch handles failure of getProfile or failure of token refresh via interceptor
       localStorage.removeItem("token");
       localStorage.removeItem("refreshToken");
       setUser(null);
       setActiveGroupState(null);
+      setPreferredStartDayOfMonthState(1); // Reset to default
       // No navigation here, let protected routes handle it
     } finally {
       setIsLoading(false);
     }
-  }, [navigate, setActiveGroupState]); // Added dependencies based on usage
+  }, [navigate]); // Added dependencies based on usage
 
   useEffect(() => {
     checkAuth();
@@ -124,7 +149,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setIsLoading(true);
 
       // authApi.login now returns { user, accessToken, refreshToken }
-      const { user: userData, accessToken, refreshToken } = await authApi.login(email, password);
+      const { user: userData, accessToken, refreshToken } = await authApi.login(
+        email,
+        password
+      );
 
       localStorage.setItem("token", accessToken); // Store accessToken as 'token'
       localStorage.setItem("refreshToken", refreshToken);
@@ -135,6 +163,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       } else {
         setActiveGroupState(null);
       }
+      // Set preferred start day from user data, or default to 1
+      setPreferredStartDayOfMonthState(userData.preferredStartDayOfMonth || 1);
 
       notifications.show({
         title: "Login realizado com sucesso",
@@ -205,7 +235,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         message: "Você saiu da sua conta com sucesso.",
         color: "blue",
       });
-
     } catch (error: any) {
       console.error("Error during backend logout:", error);
       notifications.show({
@@ -222,6 +251,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       localStorage.removeItem("refreshToken");
       setUser(null);
       setActiveGroupState(null);
+      setPreferredStartDayOfMonthState(1); // Reset to default
       setIsLoading(false);
       navigate("/login"); // Ensure navigation to login after all operations
     }
@@ -297,6 +327,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         checkAuth,
         activeGroup, // Provide activeGroup
         setActiveGroup, // Provide setActiveGroup
+        preferredStartDayOfMonth, // Provide preferredStartDayOfMonth
+        setPreferredStartDayOfMonth, // Provide setPreferredStartDayOfMonth
       }}
     >
       {children}

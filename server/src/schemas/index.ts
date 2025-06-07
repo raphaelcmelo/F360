@@ -33,6 +33,12 @@ export const UpdateGroupDisplayNameSchema = z.object({
   newDisplayName: z.string().min(1, "Nome de exibição é obrigatório"),
 });
 
+// New Schema for accepting group invitations
+export const AcceptGroupInvitationSchema = z.object({
+  groupId: z.string().min(1, "ID do grupo é obrigatório"),
+  token: z.string().min(1, "Token é obrigatório"),
+});
+
 // Budget Schemas
 export const CreateBudgetSchema = z.object({
   grupoId: z.string().min(1, "ID do grupo é obrigatório"),
@@ -106,3 +112,8 @@ export const UpdateTransactionSchema = z.object({
     path: ["data", "categoria", "tipo", "valor", "description"],
   }
 );
+
+// New schema for updating user preferences
+export const UpdateUserPreferencesSchema = z.object({
+  preferredStartDayOfMonth: z.number().min(1).max(30).optional(),
+});

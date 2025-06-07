@@ -7,6 +7,7 @@ export interface IUser extends Document {
   password?: string;
   isActive: boolean;
   grupos: { groupId: mongoose.Types.ObjectId; displayName: string }[];
+  preferredStartDayOfMonth?: number; // New field for preferred start day
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -30,6 +31,12 @@ const userSchema = new Schema<IUser>(
         displayName: { type: String, required: true, trim: true },
       },
     ],
+    preferredStartDayOfMonth: {
+      type: Number,
+      default: 1, // Default to 1st day of the month
+      min: 1,
+      max: 30, // Allow days 1 to 30
+    },
   },
   {
     timestamps: true,

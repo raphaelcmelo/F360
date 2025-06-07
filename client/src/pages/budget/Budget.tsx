@@ -26,6 +26,7 @@ import {
   IconTrash,
   IconChevronLeft,
   IconChevronRight,
+  IconCalendarStats, // New icon for the button
 } from "@tabler/icons-react";
 import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
@@ -82,8 +83,13 @@ interface UIBudget {
   categorias: UIBudgetCategory[];
 }
 
+// Helper to get days in a month
+const getDaysInMonth = (year: number, month: number) => {
+  return new Date(year, month + 1, 0).getDate();
+};
+
 export default function Budget() {
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { user, isLoading: isAuthLoading, preferredStartDayOfMonth, setPreferredStartDayOfMonth } = useAuth(); // Use preferredStartDayOfMonth and setPreferredStartDayOfMonth from context
   const [groups, setGroups] = useState<BudgetGroupType[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const [budget, setBudget] = useState<UIBudget | null>(null);
@@ -92,8 +98,9 @@ export default function Budget() {
   // State for month and year navigation
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  // Removed local startDayOfMonth state, now using context
 
-  // Modals for adding, editing, and deleting
+  // Modals for adding, editing, deleting, and setting start day
   const [addModalOpened, { open: openAddModal, close: closeAddModal }] =
     useDisclosure(false);
   const [editModalOpened, { open: openEditModal, close: closeEditModal }] =
@@ -102,6 +109,10 @@ export default function Budget() {
     deleteModalOpened,
     { open: openDeleteModal, close: closeDeleteModal },
   ] = useDisclosure(false);
+  const [
+    startDayModalOpened,
+    { open: openStartDayModal, close: closeStartDayModal },
+  ] = useDisclosure(false); // New disclosure for start day modal
 
   const [selectedItem, setSelectedItem] = useState<PlannedBudgetItem | null>(
     null
@@ -202,27 +213,41 @@ export default function Budget() {
 
     setIsBudgetLoading(true);
     try {
-      const startDate = new Date(currentYear, currentMonth, 1);
-      const endDate = new Date(currentYear, currentMonth + 1, 0);
+      const day = preferredStartDayOfMonth; // Use preferredStartDayOfMonth from context
+
+      // Calculate start date for the current period
+      const periodStartDate = new Date(currentYear, currentMonth, Math.min(day, getDaysInMonth(currentYear, currentMonth)));
+      periodStartDate.setHours(0, 0, 0, 0); // Set to start of day
+
+      // Calculate end date for the current period (day before startDayOfMonth in next month)
+      let nextMonth = currentMonth + 1;
+      let nextMonthYear = currentYear;
+      if (nextMonth > 11) {
+        nextMonth = 0;
+        nextMonthYear++;
+      }
+      const periodEndDate = new Date(nextMonthYear, nextMonth, Math.min(day - 1, getDaysInMonth(nextMonthYear, nextMonth)));
+      periodEndDate.setHours(23, 59, 59, 999); // Set to end of day
 
       let currentBudget: BudgetType | null = null;
 
       const groupBudgets = await budgetApi.getGroupBudgets(selectedGroupId);
 
+      // Find budget that matches the calculated period
       currentBudget =
         groupBudgets.find(
           (b) =>
-            new Date(b.dataInicio).getMonth() === currentMonth &&
-            new Date(b.dataInicio).getFullYear() === currentYear
+            new Date(b.dataInicio).getTime() === periodStartDate.getTime() &&
+            new Date(b.dataFim).getTime() === periodEndDate.getTime()
         ) || null;
 
       if (!currentBudget) {
-        // If no budget exists for the current month, create one.
-        // The backend will handle cloning from the previous month if available.
+        // If no budget exists for the current period, create one.
+        // The backend will handle cloning from the previous period if available.
         currentBudget = await budgetApi.createBudget(
           selectedGroupId,
-          startDate.toISOString(),
-          endDate.toISOString()
+          periodStartDate.toISOString(),
+          periodEndDate.toISOString()
         );
       }
 
@@ -269,7 +294,7 @@ export default function Budget() {
     } finally {
       setIsBudgetLoading(false);
     }
-  }, [selectedGroupId, user?._id, currentMonth, currentYear]);
+  }, [selectedGroupId, user?._id, currentMonth, currentYear, preferredStartDayOfMonth]); // Add preferredStartDayOfMonth to dependencies
 
   useEffect(() => {
     if (selectedGroupId && !isAuthLoading) {
@@ -533,6 +558,12 @@ export default function Budget() {
     );
   }
 
+  // Options for the day selector (1 to 30)
+  const dayOptions = Array.from({ length: 30 }, (_, i) => ({
+    value: String(i + 1),
+    label: String(i + 1),
+  }));
+
   return (
     <motion.div
       className="page-transition"
@@ -605,6 +636,17 @@ export default function Budget() {
         >
           <IconChevronRight size={24} />
         </ActionIcon>
+      </Group>
+
+      <Group justify="flex-start" mb="xl">
+        <Button
+          variant="outline"
+          leftSection={<IconCalendarStats size={16} />}
+          onClick={openStartDayModal}
+          disabled={isBudgetLoading}
+        >
+          Definir data de início do período: {preferredStartDayOfMonth}
+        </Button>
       </Group>
 
       <Grid>
@@ -864,6 +906,41 @@ export default function Budget() {
             Excluir
           </Button>
         </Group>
+      </Modal>
+
+      {/* Start Day Selection Modal */}
+      <Modal
+        opened={startDayModalOpened}
+        onClose={closeStartDayModal}
+        title="Definir Dia de Início do Período"
+        centered
+      >
+        <Stack>
+          <Text>
+            Selecione o dia do mês em que seu período de orçamento deve começar.
+            Por exemplo, se você selecionar '10', seu orçamento irá de 10 de um
+            mês a 9 do mês seguinte.
+          </Text>
+          <Select
+            label="Dia de Início do Período"
+            placeholder="Selecione o dia"
+            data={dayOptions}
+            value={String(preferredStartDayOfMonth)} // Use value from context
+            onChange={(value) => {
+              if (value) {
+                setPreferredStartDayOfMonth(parseInt(value, 10)); // Update context
+                closeStartDayModal(); // Close modal after selection
+              }
+            }}
+            disabled={isBudgetLoading}
+            w="100%"
+          />
+          <Group justify="flex-end" mt="md">
+            <Button variant="default" onClick={closeStartDayModal}>
+              Cancelar
+            </Button>
+          </Group>
+        </Stack>
       </Modal>
     </motion.div>
   );

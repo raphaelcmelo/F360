@@ -34,6 +34,7 @@ import {
   IconEdit,
   IconTrash,
   IconInfoCircle,
+  IconCalendarStats, // New icon for the button
 } from "@tabler/icons-react";
 import {
   transactionApi,
@@ -53,6 +54,7 @@ import CurrencyInput from "../../components/ui/CurrencyInput";
 import { notifications } from "@mantine/notifications";
 import { Group as UserGroup } from "../../types/group";
 import { formatCurrency } from "../../utils/format"; // Import the formatCurrency utility
+import { useAuth } from "../../contexts/AuthContext"; // Import useAuth
 
 // Define the schema for the transaction form
 const transactionSchema = z.object({
@@ -84,7 +86,13 @@ const updateTransactionSchema = z.object({
 
 type UpdateTransactionFormValues = z.infer<typeof updateTransactionSchema>;
 
+// Helper to get days in a month
+const getDaysInMonth = (year: number, month: number) => {
+  return new Date(year, month + 1, 0).getDate();
+};
+
 export default function Transactions() {
+  const { user, isLoading: isAuthLoading, preferredStartDayOfMonth, setPreferredStartDayOfMonth } = useAuth(); // Use preferredStartDayOfMonth and setPreferredStartDayOfMonth from context
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [userGroups, setUserGroups] = useState<UserGroup[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -111,6 +119,12 @@ export default function Transactions() {
   ] = useDisclosure(false);
   const [selectedTransactionForDetails, setSelectedTransactionForDetails] =
     useState<Transaction | null>(null);
+
+  // New disclosure for start day modal
+  const [
+    startDayModalOpened,
+    { open: openStartDayModal, close: closeStartDayModal },
+  ] = useDisclosure(false);
 
   const [searchParams] = useSearchParams();
   const [highlightedTransactionId, setHighlightedTransactionId] = useState<
@@ -204,7 +218,7 @@ export default function Transactions() {
   }, [searchParams, transactions]); // Depend on transactions to ensure they are loaded
 
   const fetchTransactionsAndBudget = useCallback(async () => {
-    if (!selectedGroupId) {
+    if (!selectedGroupId || isAuthLoading) {
       setIsLoading(false);
       return;
     }
@@ -214,19 +228,31 @@ export default function Transactions() {
       const currentDate = new Date();
       const currentMonth = currentDate.getMonth();
       const currentYear = currentDate.getFullYear();
+      const day = preferredStartDayOfMonth; // Use preferredStartDayOfMonth from context
 
-      const startDate = new Date(currentYear, currentMonth, 1).toISOString();
-      const endDate = new Date(currentYear, currentMonth + 1, 0).toISOString();
+      // Calculate start date for the current period
+      const periodStartDate = new Date(currentYear, currentMonth, Math.min(day, getDaysInMonth(currentYear, currentMonth)));
+      periodStartDate.setHours(0, 0, 0, 0); // Set to start of day
+
+      // Calculate end date for the current period (day before startDayOfMonth in next month)
+      let nextMonth = currentMonth + 1;
+      let nextMonthYear = currentYear;
+      if (nextMonth > 11) {
+        nextMonth = 0;
+        nextMonthYear++;
+      }
+      const periodEndDate = new Date(nextMonthYear, nextMonth, Math.min(day - 1, getDaysInMonth(nextMonthYear, nextMonth)));
+      periodEndDate.setHours(23, 59, 59, 999); // Set to end of day
 
       const groupBudgets = await budgetApi.getGroupBudgets(selectedGroupId);
 
       let currentMonthBudget: BudgetType | null = null;
 
       for (const b of groupBudgets) {
-        const budgetStartDate = new Date(b.dataInicio);
+        // Find budget that matches the calculated period
         if (
-          budgetStartDate.getMonth() === currentMonth &&
-          budgetStartDate.getFullYear() === currentYear
+          new Date(b.dataInicio).getTime() === periodStartDate.getTime() &&
+          new Date(b.dataFim).getTime() === periodEndDate.getTime()
         ) {
           currentMonthBudget = b;
           break;
@@ -297,8 +323,8 @@ export default function Transactions() {
         fetchedBudget = {
           _id: "",
           grupoId: selectedGroupId,
-          dataInicio: new Date(currentYear, currentMonth, 1).toISOString(),
-          dataFim: new Date(currentYear, currentMonth + 1, 0).toISOString(),
+          dataInicio: periodStartDate.toISOString(),
+          dataFim: periodEndDate.toISOString(),
           criadoPor: "",
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -317,8 +343,8 @@ export default function Transactions() {
 
       const transactionsData = await transactionApi.getTransactionsByGroup(
         selectedGroupId,
-        startDate,
-        endDate
+        periodStartDate.toISOString(), // Use calculated start date
+        periodEndDate.toISOString() // Use calculated end date
       );
 
       setTransactions(transactionsData);
@@ -333,7 +359,7 @@ export default function Transactions() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedGroupId]);
+  }, [selectedGroupId, isAuthLoading, preferredStartDayOfMonth]); // Add preferredStartDayOfMonth to dependencies
 
   useEffect(() => {
     if (selectedGroupId) {
@@ -507,6 +533,12 @@ export default function Transactions() {
       ).map((type) => ({ value: type, label: type }))
     : [];
 
+  // Options for the day selector (1 to 30)
+  const dayOptions = Array.from({ length: 30 }, (_, i) => ({
+    value: String(i + 1),
+    label: String(i + 1),
+  }));
+
   return (
     <motion.div
       className="page-transition"
@@ -554,6 +586,17 @@ export default function Transactions() {
             </Menu.Dropdown>
           </Menu>
         </Group>
+      </Group>
+
+      <Group justify="flex-start" mb="xl">
+        <Button
+          variant="outline"
+          leftSection={<IconCalendarStats size={16} />}
+          onClick={openStartDayModal}
+          disabled={isLoading}
+        >
+          Definir data de início do período: {preferredStartDayOfMonth}
+        </Button>
       </Group>
 
       <Paper p="md" radius="md" withBorder mb="xl">
@@ -645,6 +688,7 @@ export default function Transactions() {
                         transaction.categoria === "renda"
                           ? "green"
                           : transaction.categoria === "despesa"
+                          ? "red"
                           ? "red"
                           : transaction.categoria === "conta"
                           ? "orange"
@@ -1062,6 +1106,41 @@ export default function Transactions() {
             </Group>
           </Stack>
         )}
+      </Modal>
+
+      {/* Start Day Selection Modal (for Transactions) */}
+      <Modal
+        opened={startDayModalOpened}
+        onClose={closeStartDayModal}
+        title="Definir Dia de Início do Período"
+        centered
+      >
+        <Stack>
+          <Text>
+            Selecione o dia do mês em que seu período de lançamentos deve
+            começar. Por exemplo, se você selecionar '10', seus lançamentos
+            serão filtrados de 10 de um mês a 9 do mês seguinte.
+          </Text>
+          <Select
+            label="Dia de Início do Período"
+            placeholder="Selecione o dia"
+            data={dayOptions}
+            value={String(preferredStartDayOfMonth)} // Use value from context
+            onChange={(value) => {
+              if (value) {
+                setPreferredStartDayOfMonth(parseInt(value, 10)); // Update context
+                closeStartDayModal(); // Close modal after selection
+              }
+            }}
+            disabled={isLoading}
+            w="100%"
+          />
+          <Group justify="flex-end" mt="md">
+            <Button variant="default" onClick={closeStartDayModal}>
+              Cancelar
+            </Button>
+          </Group>
+        </Stack>
       </Modal>
     </motion.div>
   );

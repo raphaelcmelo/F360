@@ -5,6 +5,7 @@ import {
   updateUser,
   deleteUser,
   getDashboardStats,
+  updateUserPreferences, // Import the new controller
 } from "../controllers/userController";
 import { authenticateToken, requireRole } from "../middleware/auth";
 
@@ -12,6 +13,9 @@ const router: Router = express.Router();
 
 // Dashboard stats (accessible by all authenticated users)
 router.get("/dashboard/stats", authenticateToken, getDashboardStats);
+
+// User preferences (accessible by authenticated user for their own preferences)
+router.put("/preferences", authenticateToken, updateUserPreferences); // New route
 
 // User management routes (admin only)
 router.get("/", authenticateToken, requireRole(["admin"]), getAllUsers);
