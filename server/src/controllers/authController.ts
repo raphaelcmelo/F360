@@ -1,13 +1,13 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import ms from 'ms';
+import ms from "ms";
 import User from "../models/User";
 import Group from "../models/Group"; // Import the new Group model
 import Token from "../models/Token"; // Import the new Token model
 import {
   LoginSchema,
-  CreateUserSchema,
+  RegisterSchema, // Corrected: Changed CreateUserSchema to RegisterSchema
   ForgotPasswordSchema,
   ResetPasswordSchema,
   AcceptGroupInvitationSchema, // Import the new schema
@@ -27,7 +27,7 @@ export const register = async (
   res: Response<ApiResponse>
 ): Promise<void> => {
   try {
-    const validatedData = CreateUserSchema.parse(req.body);
+    const validatedData = RegisterSchema.parse(req.body); // Corrected: Used RegisterSchema
     const { email, name, password } = validatedData;
 
     const existingUser = await User.findOne({ email });
@@ -82,18 +82,26 @@ export const register = async (
       }
     } else {
       // If no invitation, create a default personal group for the new user
+      console.log(`[Register] Creating personal group for user: ${user.name}`);
       const personalGroup = await Group.create({
-        nome: `Grupo Pessoal de ${user.name}`,
+        nome: `Grupo de ${user.name}`,
         membros: [{ userId: user._id, role: "admin" }],
         criadoPor: user._id,
       });
+      console.log(
+        `[Register] Personal group created with ID: ${personalGroup._id}`
+      );
 
       // Link the user to their new personal group
       user.grupos.push({
         groupId: personalGroup._id,
         displayName: personalGroup.nome,
       });
+      console.log(
+        `[Register] Linking personal group ${personalGroup._id} to user ${user._id}`
+      );
       await user.save();
+      console.log(`[Register] User ${user._id} saved with new group.`);
     }
 
     const authToken = generateToken(user._id);
@@ -116,10 +124,14 @@ export const register = async (
       return;
     }
 
-    console.error("Registration Error:", error); // Log the actual error for debugging
+    console.error("Registration Error:", error.message || error); // Log the actual error message
+    if (error.stack) {
+      console.error("Registration Error Stack:", error.stack); // Log stack trace for more details
+    }
     res.status(500).json({
       success: false,
       error: "Server error during registration",
+      details: error.message || "Unknown error", // Provide error message to client if safe
     });
   }
 };
@@ -166,8 +178,11 @@ export const login = async (
       .update(refreshToken)
       .digest("hex");
 
-    const refreshTokenExpiresIn = process.env.JWT_REFRESH_TOKEN_EXPIRES_IN || "7d";
-    const refreshTokenExpiresAt = new Date(Date.now() + ms(refreshTokenExpiresIn));
+    const refreshTokenExpiresIn =
+      process.env.JWT_REFRESH_TOKEN_EXPIRES_IN || "7d";
+    const refreshTokenExpiresAt = new Date(
+      Date.now() + ms(refreshTokenExpiresIn)
+    );
 
     await Token.create({
       userId: user._id,
@@ -189,7 +204,8 @@ export const login = async (
       message: "Login successful",
     });
   } catch (error: any) {
-    if (error instanceof z.ZodError) { // More specific error handling
+    if (error instanceof z.ZodError) {
+      // More specific error handling
       res.status(400).json({
         success: false,
         error: "Validation error",
@@ -393,9 +409,12 @@ export const logout = async (
     // If req.user is not available (e.g. logout is not an authenticated route),
     // then we might omit it, but it's less secure as anyone with a valid refresh token could invalidate it.
     // For now, let's assume req.user might be present.
-    const deleteQuery: any = { token: hashedRefreshToken, type: "sessionRefreshToken" };
+    const deleteQuery: any = {
+      token: hashedRefreshToken,
+      type: "sessionRefreshToken",
+    };
     if (req.user?._id) {
-        deleteQuery.userId = req.user._id;
+      deleteQuery.userId = req.user._id;
     }
 
     const result = await Token.deleteOne(deleteQuery);
@@ -404,7 +423,12 @@ export const logout = async (
       // This could mean the token was already invalid, expired, or doesn't belong to the user (if userId was in query)
       // For simplicity, we'll still return a success, as the client's goal (being logged out) is achieved.
       // Alternatively, you could return a 404 or specific message if token not found.
-      console.warn(`Refresh token not found or already invalidated during logout: ${refreshToken.substring(0,10)}...`);
+      console.warn(
+        `Refresh token not found or already invalidated during logout: ${refreshToken.substring(
+          0,
+          10
+        )}...`
+      );
     }
 
     res.status(200).json({
@@ -423,11 +447,16 @@ export const logout = async (
 // Add this function to server/src/controllers/authController.ts
 // Ensure imports for crypto, jwt, Token, ms, Request, Response, ApiResponse are present.
 
-export const refreshToken = async (req: Request, res: Response<ApiResponse>): Promise<void> => {
+export const refreshToken = async (
+  req: Request,
+  res: Response<ApiResponse>
+): Promise<void> => {
   const { token: providedRefreshToken } = req.body; // Assuming client sends { "token": "refreshTokenValue" }
 
   if (!providedRefreshToken) {
-    res.status(401).json({ success: false, error: "Refresh token not provided" });
+    res
+      .status(401)
+      .json({ success: false, error: "Refresh token not provided" });
     return;
   }
 
@@ -446,7 +475,9 @@ export const refreshToken = async (req: Request, res: Response<ApiResponse>): Pr
 
     if (!tokenDoc || !tokenDoc.userId) {
       // If tokenDoc is null or userId is somehow missing (should not happen for sessionRefreshTokens)
-      res.status(403).json({ success: false, error: "Invalid or expired refresh token." });
+      res
+        .status(403)
+        .json({ success: false, error: "Invalid or expired refresh token." });
       return;
     }
 
@@ -464,11 +495,12 @@ export const refreshToken = async (req: Request, res: Response<ApiResponse>): Pr
       },
       message: "Access token refreshed successfully",
     });
-
   } catch (error: any) {
     console.error("Refresh Token Error:", error);
     // Check if error is ZodError if you parse req.body with Zod, though not shown here for simplicity
-    res.status(500).json({ success: false, error: "Server error during token refresh" });
+    res
+      .status(500)
+      .json({ success: false, error: "Server error during token refresh" });
   }
 };
 export const getUserGroups = async (
