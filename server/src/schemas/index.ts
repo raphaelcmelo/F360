@@ -1,115 +1,108 @@
 import { z } from "zod";
 
 // Auth Schemas
-export const CreateUserSchema = z.object({
+export const RegisterSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
-  email: z.string().email("Formato de e-mail inválido"),
+  email: z.string().email("Email inválido"),
   password: z.string().min(6, "A senha deve ter pelo menos 6 caracteres"),
 });
 
 export const LoginSchema = z.object({
-  email: z.string().email("Formato de e-mail inválido"),
+  email: z.string().email("Email inválido"),
   password: z.string().min(1, "Senha é obrigatória"),
 });
 
 export const ForgotPasswordSchema = z.object({
-  email: z.string().email("Formato de e-mail inválido"),
+  email: z.string().email("Email inválido"),
 });
 
-export const ResetPasswordSchema = z
-  .object({
-    password: z
-      .string()
-      .min(6, "A nova senha deve ter pelo menos 6 caracteres"),
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "As senhas não coincidem",
-    path: ["confirmPassword"],
-  });
+export const ResetPasswordSchema = z.object({
+  password: z.string().min(6, "A senha deve ter pelo menos 6 caracteres"),
+});
 
 // Group Schemas
 export const CreateGroupSchema = z.object({
-  nome: z.string().min(1, "O nome do grupo é obrigatório"),
+  nome: z.string().min(1, "Nome do grupo é obrigatório"),
 });
 
 export const InviteMemberSchema = z.object({
-  email: z.string().email("Formato de e-mail inválido"),
+  email: z.string().email("Email do membro inválido"),
 });
 
 export const UpdateGroupDisplayNameSchema = z.object({
-  newDisplayName: z.string().min(1, "O nome de exibição é obrigatório"),
-});
-
-// New Schema for accepting group invitations
-export const AcceptGroupInvitationSchema = z.object({
-  groupId: z.string().min(1, "ID do grupo é obrigatório"),
-  token: z.string().min(1, "Token é obrigatório"),
+  newDisplayName: z.string().min(1, "Nome de exibição é obrigatório"),
 });
 
 // Budget Schemas
 export const CreateBudgetSchema = z.object({
   grupoId: z.string().min(1, "ID do grupo é obrigatório"),
-  dataInicio: z.string().datetime("Data de início inválida"), // Assuming ISO string format
-  dataFim: z.string().datetime("Data de fim inválida"), // Assuming ISO string format
+  dataInicio: z.string().refine((val) => !isNaN(new Date(val).getTime()), {
+    message: "Data de início inválida",
+  }),
+  dataFim: z.string().refine((val) => !isNaN(new Date(val).getTime()), {
+    message: "Data de fim inválida",
+  }),
 });
 
-// Planned BudgetItem Schemas
+// PlannedBudgetItem Schemas
 export const CreatePlannedBudgetItemSchema = z.object({
   budgetId: z.string().min(1, "ID do orçamento é obrigatório"),
   groupId: z.string().min(1, "ID do grupo é obrigatório"),
   categoryType: z.enum(["renda", "despesa", "conta", "poupanca"], {
     required_error: "Tipo de categoria é obrigatório",
   }),
-  nome: z
-    .string()
-    .min(1, "Nome do item é obrigatório")
-    .max(200, "Nome muito longo"),
+  nome: z.string().min(1, "Nome do item é obrigatório"),
   valorPlanejado: z.number().min(0, "Valor planejado deve ser não negativo"),
 });
 
 export const UpdatePlannedBudgetItemSchema = z.object({
   categoryType: z
-    .enum(["renda", "despesa", "conta", "poupanca"], {
-      required_error: "Tipo de categoria é obrigatório",
-    })
+    .enum(["renda", "despesa", "conta", "poupanca"])
     .optional(),
-  nome: z
-    .string()
-    .min(1, "Nome do item é obrigatório")
-    .max(200, "Nome muito longo")
-    .optional(),
-  valorPlanejado: z
-    .number()
-    .min(0, "Valor planejado deve ser não negativo")
-    .optional(),
-});
+  nome: z.string().min(1, "Nome do item é obrigatório").optional(),
+  valorPlanejado: z.number().min(0, "Valor planejado deve ser não negativo").optional(),
+}).refine(
+  (data) =>
+    data.categoryType !== undefined ||
+    data.nome !== undefined ||
+    data.valorPlanejado !== undefined,
+  {
+    message: "Pelo menos um campo deve ser fornecido para atualização",
+    path: ["categoryType", "nome", "valorPlanejado"],
+  }
+);
 
 // Transaction Schemas
 export const CreateTransactionSchema = z.object({
   grupoId: z.string().min(1, "ID do grupo é obrigatório"),
-  data: z.string().datetime("Data inválida. Use formato ISO 8601."),
+  data: z.string().refine((val) => !isNaN(new Date(val).getTime()), {
+    message: "Data da transação inválida",
+  }),
   categoria: z.enum(["renda", "despesa", "conta", "poupanca"], {
     required_error: "Categoria é obrigatória",
   }),
   tipo: z.string().min(1, "Tipo é obrigatório"),
-  valor: z.number().min(0.01, "O valor deve ser maior que zero"),
-  description: z
-    .string()
-    .max(140, "Descrição muito longa (máx. 140 caracteres)")
-    .optional(), // New optional field
+  valor: z.number().min(0.01, "Valor deve ser maior que zero"),
+  description: z.string().optional(),
 });
 
 export const UpdateTransactionSchema = z.object({
-  data: z.string().datetime("Data inválida. Use formato ISO 8601.").optional(),
+  data: z.string().refine((val) => !isNaN(new Date(val).getTime()), {
+    message: "Data da transação inválida",
+  }).optional(),
   categoria: z.enum(["renda", "despesa", "conta", "poupanca"]).optional(),
   tipo: z.string().min(1, "Tipo é obrigatório").optional(),
-  valor: z.number().min(0.01, "O valor deve ser maior que zero").optional(),
-  description: z
-    .string()
-    .max(140, "Descrição muito longa (máx. 140 caracteres)")
-    .optional(), // New optional field
-});
-export const DeleteTransactionSchema = z.object({
-  transactionId: z.string().min(1, "ID da transação é obrigatório"),
-});
+  valor: z.number().min(0.01, "Valor deve ser maior que zero").optional(),
+  description: z.string().optional(),
+}).refine(
+  (data) =>
+    data.data !== undefined ||
+    data.categoria !== undefined ||
+    data.tipo !== undefined ||
+    data.valor !== undefined ||
+    data.description !== undefined,
+  {
+    message: "Pelo menos um campo deve ser fornecido para atualização",
+    path: ["data", "categoria", "tipo", "valor", "description"],
+  }
+);

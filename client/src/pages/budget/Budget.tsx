@@ -24,6 +24,8 @@ import {
   IconPlus,
   IconEdit,
   IconTrash,
+  IconChevronLeft,
+  IconChevronRight,
 } from "@tabler/icons-react";
 import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
@@ -86,6 +88,10 @@ export default function Budget() {
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const [budget, setBudget] = useState<UIBudget | null>(null);
   const [isBudgetLoading, setIsBudgetLoading] = useState(false);
+
+  // State for month and year navigation
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 
   // Modals for adding, editing, and deleting
   const [addModalOpened, { open: openAddModal, close: closeAddModal }] =
@@ -196,10 +202,6 @@ export default function Budget() {
 
     setIsBudgetLoading(true);
     try {
-      const currentDate = new Date();
-      const currentYear = currentDate.getFullYear();
-      const currentMonth = currentDate.getMonth();
-
       const startDate = new Date(currentYear, currentMonth, 1);
       const endDate = new Date(currentYear, currentMonth + 1, 0);
 
@@ -215,6 +217,8 @@ export default function Budget() {
         ) || null;
 
       if (!currentBudget) {
+        // If no budget exists for the current month, create one.
+        // The backend will handle cloning from the previous month if available.
         currentBudget = await budgetApi.createBudget(
           selectedGroupId,
           startDate.toISOString(),
@@ -265,7 +269,7 @@ export default function Budget() {
     } finally {
       setIsBudgetLoading(false);
     }
-  }, [selectedGroupId, user?._id]);
+  }, [selectedGroupId, user?._id, currentMonth, currentYear]);
 
   useEffect(() => {
     if (selectedGroupId && !isAuthLoading) {
@@ -344,6 +348,7 @@ export default function Budget() {
         if (!prevBudget) return null;
 
         const updatedCategories = prevBudget.categorias.map((category) => {
+          // If category type changed, remove from old category and add to new
           if (
             category.tipo === selectedItem.categoryType &&
             category.tipo !== updatedItem.categoryType
@@ -359,6 +364,7 @@ export default function Budget() {
               (item) => item._id === updatedItem._id
             );
             if (itemIndex > -1) {
+              // Update existing item in the same category
               const newLancamentos = [...category.lancamentosPlanejados];
               newLancamentos[itemIndex] = {
                 _id: updatedItem._id,
@@ -368,6 +374,7 @@ export default function Budget() {
               };
               return { ...category, lancamentosPlanejados: newLancamentos };
             } else {
+              // Add to new category if it was moved
               return {
                 ...category,
                 lancamentosPlanejados: [
@@ -462,6 +469,41 @@ export default function Budget() {
     );
   };
 
+  const monthNames = [
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
+  ];
+
+  const goToPreviousMonth = () => {
+    setCurrentMonth((prevMonth) => {
+      if (prevMonth === 0) {
+        setCurrentYear((prevYear) => prevYear - 1);
+        return 11;
+      }
+      return prevMonth - 1;
+    });
+  };
+
+  const goToNextMonth = () => {
+    setCurrentMonth((prevMonth) => {
+      if (prevMonth === 11) {
+        setCurrentYear((prevYear) => prevYear + 1);
+        return 0;
+      }
+      return prevMonth + 1;
+    });
+  };
+
   if (isAuthLoading) {
     return (
       <motion.div
@@ -541,6 +583,28 @@ export default function Budget() {
             </Menu.Dropdown>
           </Menu>
         </Group>
+      </Group>
+
+      <Group justify="center" mb="xl">
+        <ActionIcon
+          variant="subtle"
+          size="lg"
+          onClick={goToPreviousMonth}
+          aria-label="Mês anterior"
+        >
+          <IconChevronLeft size={24} />
+        </ActionIcon>
+        <Text size="xl" fw={700}>
+          {monthNames[currentMonth]} de {currentYear}
+        </Text>
+        <ActionIcon
+          variant="subtle"
+          size="lg"
+          onClick={goToNextMonth}
+          aria-label="Próximo mês"
+        >
+          <IconChevronRight size={24} />
+        </ActionIcon>
       </Group>
 
       <Grid>

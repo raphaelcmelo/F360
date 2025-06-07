@@ -65,6 +65,42 @@ export const createBudget = async (
       criadoPor: userId,
     });
 
+    // --- Cloning Logic ---
+    // Calculate previous month's dates
+    const prevMonthStartDate = new Date(dataInicio);
+    prevMonthStartDate.setMonth(prevMonthStartDate.getMonth() - 1);
+    prevMonthStartDate.setDate(1); // Set to 1st of previous month
+
+    const prevMonthEndDate = new Date(prevMonthStartDate.getFullYear(), prevMonthStartDate.getMonth() + 1, 0); // Last day of previous month
+
+    // Find the budget for the previous month
+    const previousMonthBudget = await Budget.findOne({
+      grupoId,
+      dataInicio: prevMonthStartDate,
+      dataFim: prevMonthEndDate,
+    });
+
+    if (previousMonthBudget) {
+      const previousMonthItems = await PlannedBudgetItem.find({
+        budgetId: previousMonthBudget._id,
+      });
+
+      // Clone items to the new budget
+      const clonedItems = previousMonthItems.map((item) => ({
+        budgetId: newBudget._id,
+        groupId: item.groupId,
+        categoryType: item.categoryType,
+        nome: item.nome,
+        valorPlanejado: item.valorPlanejado,
+        criadoPor: userId, // New items are created by the current user
+      }));
+
+      if (clonedItems.length > 0) {
+        await PlannedBudgetItem.insertMany(clonedItems);
+      }
+    }
+    // --- End Cloning Logic ---
+
     res.status(201).json({
       success: true,
       data: newBudget,
