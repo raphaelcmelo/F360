@@ -5,13 +5,13 @@ import {
   getGroupBudgets,
   deleteBudget,
 } from "../controllers/budgetController";
-import { protect } from "../middleware/authMiddleware";
+import { authenticateToken } from "../middleware/auth";
 
 const router = Router();
 
-router.post("/", protect, createBudget);
-router.get("/group/:groupId", protect, getGroupBudgets);
-router.get("/:budgetId", protect, getBudgetById);
-router.delete("/:budgetId", protect, deleteBudget);
+router.post("/", authenticateToken, createBudget);
+router.get("/group/:groupId", authenticateToken, getGroupBudgets);
+router.get("/:budgetId", authenticateToken, getBudgetById);
+router.delete("/:budgetId", authenticateToken, deleteBudget);
 
 export default router;

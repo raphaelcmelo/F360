@@ -92,7 +92,12 @@ const getDaysInMonth = (year: number, month: number) => {
 };
 
 export default function Transactions() {
-  const { user, isLoading: isAuthLoading, preferredStartDayOfMonth, setPreferredStartDayOfMonth } = useAuth(); // Use preferredStartDayOfMonth and setPreferredStartDayOfMonth from context
+  const {
+    user,
+    isLoading: isAuthLoading,
+    preferredStartDayOfMonth,
+    setPreferredStartDayOfMonth,
+  } = useAuth(); // Use preferredStartDayOfMonth and setPreferredStartDayOfMonth from context
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [userGroups, setUserGroups] = useState<UserGroup[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -231,7 +236,11 @@ export default function Transactions() {
       const day = preferredStartDayOfMonth; // Use preferredStartDayOfMonth from context
 
       // Calculate start date for the current period
-      const periodStartDate = new Date(currentYear, currentMonth, Math.min(day, getDaysInMonth(currentYear, currentMonth)));
+      const periodStartDate = new Date(
+        currentYear,
+        currentMonth,
+        Math.min(day, getDaysInMonth(currentYear, currentMonth))
+      );
       periodStartDate.setHours(0, 0, 0, 0); // Set to start of day
 
       // Calculate end date for the current period (day before startDayOfMonth in next month)
@@ -241,7 +250,11 @@ export default function Transactions() {
         nextMonth = 0;
         nextMonthYear++;
       }
-      const periodEndDate = new Date(nextMonthYear, nextMonth, Math.min(day - 1, getDaysInMonth(nextMonthYear, nextMonth)));
+      const periodEndDate = new Date(
+        nextMonthYear,
+        nextMonth,
+        Math.min(day - 1, getDaysInMonth(nextMonthYear, nextMonth))
+      );
       periodEndDate.setHours(23, 59, 59, 999); // Set to end of day
 
       const groupBudgets = await budgetApi.getGroupBudgets(selectedGroupId);
@@ -688,7 +701,6 @@ export default function Transactions() {
                         transaction.categoria === "renda"
                           ? "green"
                           : transaction.categoria === "despesa"
-                          ? "red"
                           ? "red"
                           : transaction.categoria === "conta"
                           ? "orange"
